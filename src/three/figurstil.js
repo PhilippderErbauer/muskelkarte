@@ -7,6 +7,7 @@
 // (für den Grafikchip) rechnen dasselbe.
 
 import { region, regionGLSL } from './figur.js';
+import { regionAus, FUGE } from './koerper.js';
 
 export const FIGUR_STILE = {
   skulptur: { n: 'Skulptur', id: 0 },
@@ -20,8 +21,9 @@ const sstep = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a)
 const mixc = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
 
 // f: { basis, fl: [18 Farben], linie, fuell, rim, spec } (0..1); px: Meter pro Bildpunkt
-export function schattiere(stil, x, y, z, nx, ny, nz, ao, f, px) {
-  const [id, s] = region(x, y, z);
+// dist: Abstände zu den Muskelgruppen (Anatomie-Modell); ohne dist gelten die Regeln aus figur.js
+export function schattiere(stil, x, y, z, nx, ny, nz, ao, f, px, dist) {
+  const [id, s] = dist ? regionAus(dist) : region(x, y, z);
   const al = id ? sstep(-px, px, s) : 0;
   const rc = f.fl[id] || f.basis;
   const d1 = Math.max(0, nx * L1[0] + ny * L1[1] + nz * L1[2]), d2 = Math.max(0, nx * L2[0] + ny * L2[1] + nz * L2[2]);
@@ -53,10 +55,12 @@ export function schattiere(stil, x, y, z, nx, ny, nz, ao, f, px) {
   return [c[0] * I + add, c[1] * I + add, c[2] * I + add];
 }
 
-export const FIGUR_VS = `
+// modell: Körper aus dem Anatomie-Modell mit 18 Abständen je Punkt (aD0–aD3, aE) statt Regeln
+export const figurVS = (modell) => `
 attribute vec3 aP; attribute vec3 aN; attribute float aA;
 uniform vec3 uT; uniform vec4 uR; uniform vec4 uK; uniform vec2 uO;
 varying vec3 vP; varying vec3 vN; varying float vA;
+${modell ? 'attribute vec4 aD0; attribute vec4 aD1; attribute vec4 aD2; attribute vec4 aD3; attribute vec2 aE;\nvarying vec4 vD0; varying vec4 vD1; varying vec4 vD2; varying vec4 vD3; varying vec2 vE;' : ''}
 void main() {
   vec3 p = aP - uT;
   float x1 = p.x * uR.x + p.z * uR.y; float z1 = -p.x * uR.y + p.z * uR.x;
@@ -66,9 +70,28 @@ void main() {
   float nx = aN.x * uR.x + aN.z * uR.y; float nz1 = -aN.x * uR.y + aN.z * uR.x;
   vN = vec3(nx, aN.y * uR.z - nz1 * uR.w, aN.y * uR.w + nz1 * uR.z);
   vP = aP; vA = aA;
+  ${modell ? 'vD0 = aD0; vD1 = aD1; vD2 = aD2; vD3 = aD3; vE = aE;' : ''}
 }`;
 
-export function figurFS(derivate) {
+// Gewinnende Gruppe aus den Abständen, wie regionAus() in koerper.js
+const REGION_MODELL = `
+varying vec4 vD0; varying vec4 vD1; varying vec4 vD2; varying vec4 vD3; varying vec2 vE;
+vec2 regionModell() {
+  float d[18];
+  d[0] = vD0.x; d[1] = vD0.y; d[2] = vD0.z; d[3] = vD0.w; d[4] = vD1.x; d[5] = vD1.y; d[6] = vD1.z; d[7] = vD1.w;
+  d[8] = vD2.x; d[9] = vD2.y; d[10] = vD2.z; d[11] = vD2.w; d[12] = vD3.x; d[13] = vD3.y; d[14] = vD3.z; d[15] = vD3.w;
+  d[16] = vE.x; d[17] = vE.y;
+  float d1 = 1e9, d2 = 1e9, i1 = 0.0;
+  for (int g = 0; g < 18; g++) {
+    float v = d[g];
+    if (v < d1) { d2 = d1; d1 = v; i1 = float(g); } else if (v < d2) { d2 = v; }
+  }
+  if (i1 < 0.5) return vec2(0.0, -1.0);
+  return vec2(i1, (d2 - d1) * 0.5 - ${FUGE});
+}
+`;
+
+export function figurFS(derivate, modell) {
   return `${derivate ? '#extension GL_OES_standard_derivatives : enable\n' : ''}
 #ifdef GL_FRAGMENT_PRECISION_HIGH
 precision highp float;
@@ -78,10 +101,10 @@ precision mediump float;
 varying vec3 vP; varying vec3 vN; varying float vA;
 uniform vec3 uFl[18]; uniform vec3 uBasis; uniform vec3 uLinie; uniform vec3 uFuell;
 uniform vec2 uL; uniform float uStil; uniform float uPx;
-${regionGLSL()}
+${modell ? REGION_MODELL : regionGLSL()}
 void main() {
   vec3 n = normalize(vN);
-  vec2 r = region(vP);
+  vec2 r = ${modell ? 'regionModell()' : 'region(vP)'};
   float id = r.x, s = r.y;
   float w = ${derivate ? 'max(fwidth(s), uPx * 0.5)' : 'uPx'};
   float al = id > 0.5 ? smoothstep(-w, w, s) : 0.0;

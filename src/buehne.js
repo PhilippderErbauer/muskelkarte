@@ -4,6 +4,7 @@
 // koerperBild: ein statisches Bild des Körpers (für Fortschritt, Rückblick, Teilen).
 
 import { bauFigur, MID } from './three/figur.js';
+import { ladeKoerper } from './three/koerper.js';
 import { FIGUR_STILE, schattiere } from './three/figurstil.js';
 import { pose, puppe } from './three/puppe.js';
 import { erstelleAnsicht, softAnsicht, zeichneSoft, erstelleFigurAnsicht, softFigur, zeichnePixel } from './three/render.js';
@@ -29,7 +30,14 @@ export const FARBEN = {
     } }
 };
 
+// Der Körper kommt aus dem Anatomie-Modell (src/data/koerper.bin). Klappt das Laden nicht,
+// entsteht wie bisher der selbst erzeugte Körper aus figur.js.
 let FIGUR = null;
+try {
+  const r = await fetch(new URL('./data/koerper.bin', import.meta.url));
+  if (!r.ok) throw new Error('HTTP ' + r.status);
+  FIGUR = ladeKoerper(new Uint8Array(await r.arrayBuffer()));
+} catch (e) { console.warn('Körpermodell nicht geladen, nutze den erzeugten Körper:', e); }
 export const netz = () => FIGUR || (FIGUR = bauFigur());
 export const netzFertig = () => !!FIGUR;
 
@@ -339,7 +347,7 @@ export function koerperCanvas(th, intens, o) {
   const s = Math.min(H / 1.9, W / 0.9), px = 1 / s;
   const yaw = o.yaw ?? -0.5;
   zeichnePixel(me, { yaw: flach ? Math.round(yaw / Math.PI) * Math.PI : yaw, pitch: flach ? 0 : 0.07, tx: 0, ty: 0.9, tz: 0, cx: W / 2, cy: H / 2, s, F: flach ? 60 : 7 }, out,
-    (x, y, z, nx, ny, nz, ao) => schattiere(f.id, x, y, z, nx, ny, nz, ao, f, px));
+    (x, y, z, nx, ny, nz, ao, d) => schattiere(f.id, x, y, z, nx, ny, nz, ao, f, px, d));
   const cv = document.createElement('canvas');
   cv.width = W; cv.height = H;
   cv.getContext('2d').putImageData(new ImageData(out.D, W, H), 0, 0);

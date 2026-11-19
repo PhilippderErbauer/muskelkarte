@@ -2,7 +2,9 @@
 import { MODI, MUSKELN, REGIONEN } from '../src/data/muskeln.js';
 import { UEBUNGEN, THEMEN, ROUTINEN } from '../src/data/uebungen.js';
 import { KALENDER, adventStatus, zugang } from '../src/advent.js';
+import { readFileSync } from 'node:fs';
 import { bauFigur, MID, REGELN, regionGLSL } from '../src/three/figur.js';
+import { ladeKoerper } from '../src/three/koerper.js';
 import { pose, puppe } from '../src/three/puppe.js';
 
 const fehler = [];
@@ -63,6 +65,18 @@ pruef(zugang(2026, st('2026-11-20')) === null, 'Kalender vor dem 1.12. erreichba
   for (const id of MID.slice(1)) pruef(REGELN[id], `Keine Regel für ${id}`);
   pruef(regionGLSL().includes('vec2 region'), 'GLSL-Code der Muskelflächen fehlt');
   console.log(`Figur: ${mesh.n} Punkte, ${mesh.T.length / 3} Dreiecke, ${Date.now() - t0} ms`);
+}
+// Körper aus dem Anatomie-Modell (src/data/koerper.bin)
+{
+  const t0 = Date.now();
+  const mesh = ladeKoerper(new Uint8Array(readFileSync(new URL('../src/data/koerper.bin', import.meta.url))));
+  pruef(mesh.n > 10000 && mesh.n < 65536, `Körpermodell hat ${mesh.n} Punkte`);
+  pruef(!Array.from(mesh.P).some((v) => !Number.isFinite(v)), 'Körpermodell enthält ungültige Werte');
+  pruef(Math.max(...mesh.T) < mesh.n, 'Körpermodell: Dreieck verweist auf fehlenden Punkt');
+  const zahl = new Array(MID.length).fill(0);
+  for (const m of mesh.M) zahl[m]++;
+  for (let m = 1; m < MID.length; m++) pruef(zahl[m] >= 30, `Muskelfläche ${MID[m]} ist auf dem Körpermodell kaum zu sehen (${zahl[m]} Punkte)`);
+  console.log(`Körpermodell: ${mesh.n} Punkte, ${mesh.T.length / 3} Dreiecke, ${Date.now() - t0} ms`);
 }
 console.log(`Inhalte: ${Object.keys(MUSKELN).length} Muskelgruppen, ${Object.keys(UEBUNGEN).length} Übungen, ${THEMEN.length} Themen, ${ROUTINEN.length} Routinen, ${Object.keys(KALENDER).length} Adventskalender`);
 if (fehler.length) { console.error('\nFEHLER:\n- ' + fehler.join('\n- ')); process.exit(1); }

@@ -2,7 +2,7 @@
 // Legt alle Dateien beim ersten Besuch im Speicher ab, damit die App offline läuft.
 // Nach Änderungen an der App: VERSION hochzählen, dann bekommen alle die neue Fassung.
 
-const VERSION = 'muskelkarte-2026-11-17-4';
+const VERSION = 'muskelkarte-2026-11-19-1';
 const DATEIEN = [
   './',
   './index.html',
@@ -14,6 +14,8 @@ const DATEIEN = [
   './src/buehne.js',
   './src/three/figur.js',
   './src/three/figurstil.js',
+  './src/three/koerper.js',
+  './src/data/koerper.bin',
   './src/three/puppe.js',
   './src/three/render.js',
   './src/data/muskeln.js',

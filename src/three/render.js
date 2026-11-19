@@ -7,7 +7,7 @@
 // Kamera: { yaw, pitch, tx, ty, tz, cx, cy, s, F }
 //   yaw/pitch Drehung, t* Blickpunkt, cx/cy Bildmitte in Pixeln, s Pixel pro Einheit, F Perspektive
 
-import { FIGUR_VS, figurFS, schattiere } from './figurstil.js';
+import { figurVS, figurFS, schattiere } from './figurstil.js';
 
 const { cos, sin, max, min } = Math;
 const L1 = [-0.48, 0.58, 0.66], L2 = [0.82, 0.16, 0.55], HV = [-0.27, 0.33, 0.9];
@@ -73,9 +73,11 @@ export function zeichneSoft(mesh, col, cam, out, th) {
 
 // Pixelgenau: Position und Normale werden je Bildpunkt interpoliert, shade(...) liefert die Farbe 0..1.
 // Für die Figur (Muskelflächen pro Bildpunkt) ohne WebGL und für Vorschaubilder.
+// Hat das Netz Abstände je Punkt (mesh.D, 18 Werte), werden sie mit interpoliert und als 8. Wert übergeben.
 export function zeichnePixel(mesh, cam, out, shade) {
   const P = mesh.P, N = mesh.N, A = mesh.A, T = mesh.T, n = mesh.n, W = out.W, H = out.H, D = out.D, ZB = out.ZB, IB = out.IB, ID = mesh.M;
-  const K = 10;
+  const MD = mesh.D, NG = MD ? 18 : 0;
+  const K = 10 + NG;
   if (!mesh.S2 || mesh.S2.length < n * K) mesh.S2 = new Float32Array(n * K);
   const S = mesh.S2;
   D.fill(0); ZB.fill(-1e9); if (IB) IB.fill(0);
@@ -90,8 +92,9 @@ export function zeichnePixel(mesh, cam, out, shade) {
     const nx = nx0 * cyw + nz0 * syw, nz1 = -nx0 * syw + nz0 * cyw;
     S[o + 3] = nx; S[o + 4] = ny0 * cp - nz1 * sp; S[o + 5] = ny0 * sp + nz1 * cp;
     S[o + 6] = P[3 * i]; S[o + 7] = P[3 * i + 1]; S[o + 8] = P[3 * i + 2]; S[o + 9] = A ? A[i] : 1;
+    for (let g = 0; g < NG; g++) S[o + 10 + g] = MD[i * NG + g];
   }
-  const v = new Float32Array(K);
+  const v = new Float32Array(K), dist = NG ? v.subarray(10) : undefined;
   for (let t = 0; t < T.length; t += 3) {
     const a = T[t] * K, b = T[t + 1] * K, c = T[t + 2] * K;
     if (S[a + 5] < -0.15 && S[b + 5] < -0.15 && S[c + 5] < -0.15) continue;
@@ -119,7 +122,7 @@ export function zeichnePixel(mesh, cam, out, shade) {
         if (IB) IB[o] = id;
         for (let k = 3; k < K; k++) v[k] = w0 * S[a + k] + w1 * S[b + k] + w2 * S[c + k];
         const nl = Math.hypot(v[3], v[4], v[5]) || 1;
-        const col = shade(v[6], v[7], v[8], v[3] / nl, v[4] / nl, v[5] / nl, v[9]);
+        const col = shade(v[6], v[7], v[8], v[3] / nl, v[4] / nl, v[5] / nl, v[9], dist);
         const q = o * 4;
         D[q] = col[0] * 255; D[q + 1] = col[1] * 255; D[q + 2] = col[2] * 255; D[q + 3] = 255;
       }
@@ -236,6 +239,7 @@ export function softAnsicht(canvas) {
 
 // ---------- Figur mit Muskelflächen pro Bildpunkt ----------
 // f: { id (Look 0–2), basis, fl[18], linie, fuell, rim, spec } mit Farben 0..1
+// Netze mit Abständen je Punkt (mesh.D, Anatomie-Modell) bekommen eigene Shader.
 function glFigur(canvas, gl) {
   const deriv = !!gl.getExtension('OES_standard_derivatives');
   const sh = (typ, src) => {
@@ -244,21 +248,33 @@ function glFigur(canvas, gl) {
     if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s) || 'Shader-Fehler');
     return s;
   };
-  const prog = gl.createProgram();
-  gl.attachShader(prog, sh(gl.VERTEX_SHADER, FIGUR_VS));
-  gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, figurFS(deriv)));
-  gl.linkProgram(prog);
-  if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog) || 'Link-Fehler');
-  const at = (n) => gl.getAttribLocation(prog, n), un = (n) => gl.getUniformLocation(prog, n);
-  const loc = { aP: at('aP'), aN: at('aN'), aA: at('aA') };
-  for (const n of ['uT', 'uR', 'uK', 'uO', 'uFl', 'uBasis', 'uLinie', 'uFuell', 'uL', 'uStil', 'uPx']) loc[n] = un(n);
-  const buf = { p: gl.createBuffer(), n: gl.createBuffer(), a: gl.createBuffer(), i: gl.createBuffer() };
-  let anzahl = 0, idxTyp = gl.UNSIGNED_SHORT;
+  const programme = {};
+  function programm(modell) {
+    if (programme[modell]) return programme[modell];
+    const prog = gl.createProgram();
+    gl.attachShader(prog, sh(gl.VERTEX_SHADER, figurVS(modell)));
+    gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, figurFS(deriv, modell)));
+    gl.linkProgram(prog);
+    if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(prog) || 'Link-Fehler');
+    const at = (n) => gl.getAttribLocation(prog, n), un = (n) => gl.getUniformLocation(prog, n);
+    const loc = { prog };
+    for (const n of ['aP', 'aN', 'aA', 'aD0', 'aD1', 'aD2', 'aD3', 'aE']) loc[n] = at(n);
+    for (const n of ['uT', 'uR', 'uK', 'uO', 'uFl', 'uBasis', 'uLinie', 'uFuell', 'uL', 'uStil', 'uPx']) loc[n] = un(n);
+    return (programme[modell] = loc);
+  }
+  // Prüft beim Start, dass beide Shader auf diesem Gerät laufen (sonst greift der Software-Ersatz)
+  let loc = programm(false);
+  programm(true);
+  const buf = { p: gl.createBuffer(), n: gl.createBuffer(), a: gl.createBuffer(), i: gl.createBuffer(), d: gl.createBuffer() };
+  let anzahl = 0, idxTyp = gl.UNSIGNED_SHORT, modell = false;
   const uint = gl.getExtension('OES_element_index_uint');
   const fl = new Float32Array(54);
   function laden(mesh) {
     const put = (b, d) => { gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.bufferData(gl.ARRAY_BUFFER, d, gl.STATIC_DRAW); };
     put(buf.p, mesh.P); put(buf.n, mesh.N); put(buf.a, mesh.A);
+    modell = !!mesh.D;
+    loc = programm(modell);
+    if (modell) put(buf.d, mesh.D);
     const gross = mesh.n > 65535;
     if (gross && !uint) throw new Error('Netz zu groß für dieses Gerät');
     const idx = gross ? mesh.T : new Uint16Array(mesh.T);
@@ -275,9 +291,11 @@ function glFigur(canvas, gl) {
     if (!anzahl) return;
     gl.enable(gl.DEPTH_TEST);
     gl.depthFunc(gl.LESS);
-    gl.useProgram(prog);
-    const bind = (b, l, n) => { gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.enableVertexAttribArray(l); gl.vertexAttribPointer(l, n, gl.FLOAT, false, 0, 0); };
+    gl.useProgram(loc.prog);
+    const bind = (b, l, n, stride = 0, off = 0) => { if (l < 0) return; gl.bindBuffer(gl.ARRAY_BUFFER, b); gl.enableVertexAttribArray(l); gl.vertexAttribPointer(l, n, gl.FLOAT, false, stride, off); };
     bind(buf.p, loc.aP, 3); bind(buf.n, loc.aN, 3); bind(buf.a, loc.aA, 1);
+    // 18 Abstände je Punkt hintereinander: vier vec4 und ein vec2
+    if (modell) { bind(buf.d, loc.aD0, 4, 72, 0); bind(buf.d, loc.aD1, 4, 72, 16); bind(buf.d, loc.aD2, 4, 72, 32); bind(buf.d, loc.aD3, 4, 72, 48); bind(buf.d, loc.aE, 2, 72, 64); }
     gl.uniform3f(loc.uT, cam.tx, cam.ty, cam.tz);
     gl.uniform4f(loc.uR, cos(cam.yaw), sin(cam.yaw), cos(cam.pitch), sin(cam.pitch));
     gl.uniform4f(loc.uK, cam.s * 2 / W, cam.s * 2 / H, cam.F, 0.5);
@@ -308,7 +326,7 @@ export function softFigur(canvas) {
       const W = canvas.width, H = canvas.height;
       if (!out || out.W !== W || out.H !== H) { const img = ctx.createImageData(W, H); out = { W, H, img, D: img.data, ZB: new Float32Array(W * H), IB: null }; }
       const px = 1 / cam.s;
-      zeichnePixel(mesh, cam, out, (x, y, z, nx, ny, nz, ao) => schattiere(f.id, x, y, z, nx, ny, nz, ao, f, px));
+      zeichnePixel(mesh, cam, out, (x, y, z, nx, ny, nz, ao, d) => schattiere(f.id, x, y, z, nx, ny, nz, ao, f, px, d));
       ctx.putImageData(out.img, 0, 0);
     }
   };
