@@ -19,6 +19,8 @@
 //   ['rollex', x0, x1, y, r]          Rolle längs zum Körper
 //   ['band', x, y, z, j]              Band vom Punkt zur Hand j (8 erste, 13 zweite Hand)
 //   ['hantel', j]                     Kurzhantel oder Flasche in Hand j
+//   ['seil', j1, j2]                  Handtuch oder Band zwischen zwei Punkten (5 Fuß, 8 Hand, 10 zweiter Fuß, 13 zweite Hand)
+//   ['stab', abstand]                 Stab längs am Rücken (vom Kopf bis über die Hüfte)
 
 const { abs, sqrt, max, min, cos, sin } = Math;
 
@@ -134,8 +136,16 @@ export function puppe(J, an, th) {
   kap(ha1, ha1, 3.4, 3.4, 1, 1, th.skin);
   // Requisiten, die an einer Hand hängen
   const hand = (j) => (j === 13 ? ha2 : ha1);
+  const punkt = (j) => ({ 5: f1, 8: ha1, 10: f2, 13: ha2, 4: k1, 9: k2 })[j] || ha1;
   (an.p || []).forEach((q) => {
-    if (q[0] === 'band') kap([q[1], 150 - q[2], q[3]], hand(q[4]), 0.9, 0.9, 1, 1, th.prop);
+    if (q[0] === 'seil') kap(punkt(q[1]), punkt(q[2]), 1.1, 1.1, 1, 1, th.prop);
+    else if (q[0] === 'stab') {
+      let dx = Hp[0] - Ko[0], dy = Hp[1] - Ko[1];
+      const l = sqrt(dx * dx + dy * dy) || 1;
+      dx /= l; dy /= l;
+      const ox = dy * q[1], oy = -dx * q[1];
+      kap([Ko[0] - dx * 6 + ox, Ko[1] - dy * 6 + oy, 0], [Hp[0] + dx * 12 + ox, Hp[1] + dy * 12 + oy, 0], 1.3, 1.3, 1, 1, th.prop);
+    } else if (q[0] === 'band') kap([q[1], 150 - q[2], q[3]], hand(q[4]), 0.9, 0.9, 1, 1, th.prop);
     else if (q[0] === 'hantel') { const h = hand(q[1]); kap([h[0], h[1], h[2] - 6], [h[0], h[1], h[2] + 6], 2.6, 2.6, 1, 1, th.prop); }
   });
   const n = P.length / 3;

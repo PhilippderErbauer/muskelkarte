@@ -1,6 +1,6 @@
 # Übungsliste: Ausbau von 25 auf rund 100 Übungen
 
-> **Stand:** 19. November 2026 · **Status:** Welle 1 ist eingebaut (25 Übungen, alle „A“ mit ✓). Der Rest ist Entwurf.
+> **Stand:** 19. November 2026 · **Status:** Welle 1 und 2 sind eingebaut (48 Übungen, alle „A“ und „B“ mit ✓). Der Rest ist Entwurf.
 > Abgleich mit [free-exercise-db](https://github.com/yuhonas/free-exercise-db) (gemeinfrei). Die Spalte *Vorlage* nennt die passende englische Übung dort. Übernommen werden nur Idee und Zuordnung, alle Texte entstehen neu auf Deutsch.
 
 ## So liest du die Liste
@@ -252,7 +252,7 @@ Wandsitzen, Langsame Kniebeuge, Glute Bridge, Unterarmstütz, Liegestütz, Waden
 ## 5. Vorschlag für die Reihenfolge
 
 1. ✅ **Welle 1, alle „A“ mit ✓ (25 Übungen, eingebaut am 19.11.):** schließt die Lücken auf der Körperkarte, ohne die Puppe umzubauen. IDs in `src/data/uebungen.js`: kinn-einziehen, kopf-schieben, nacken-ball, arm-pendeln, rolle-atmen, bizeps-curl, trizeps-dehnung, handgelenk-curls, unterarm-dehnen, unterarm-ausrollen, kobra, becken-kippen, rudern-band, ruecken-rund, oberer-ruecken-rollen, stufenlagerung, gesaess-ball, knieheben, bein-schwingen, quad-dehnung, quad-rollen, kreuzheben-einbeinig, raupe, kissen-druecken, schienbein-dehnung. Vereinfacht dargestellt: Handgelenk-Curls (die Puppe hat kein Handgelenk, der Unterarm kippt) und Kissen drücken (ohne sichtbare Bewegung).
-2. **Welle 2, „B“ mit ✓ (rund 23):** zweite Übung je Gruppe, dazu neue Themen wie „Schreibtisch-Schultern“, „Starke Beine ohne Geräte“, „Mit Widerstandsband“.
+2. ✅ **Welle 2, „B“ mit ✓ (23 Übungen, eingebaut am 19.11.):** zweite Übung je Gruppe, dazu drei neue Themen: „Starke Beine ohne Geräte“, „Schreibtisch: Nacken und Schultern“, „Ausrollen mit Rolle und Ball“. IDs: kinn-zur-brust, pike-liegestuetz, wand-liegestuetz, knie-liegestuetz, handtuch-curl, enge-liegestuetze, ball-druecken, crunch, seitstuetz-dips, tisch-rudern, hueftbeuge-stab, knie-zur-brust, glute-bridge-einbeinig, ausfallschritt-rueckwaerts, bein-seitlich-heben, bein-heben-liegend, ausfallschritt, step-up, beincurl-handtuch, beinrueckseite-handtuch, adduktoren-seitlage, wadendehnung-knie, fussspitzen-heben. Vereinfacht: „Ball kräftig drücken“ ohne sichtbare Bewegung.
 3. **Puppe ausbauen:** echte 3D-Gelenkwinkel, damit Seitheben, Drehungen und Bewegungen zur Seite sauber aussehen.
 4. **Welle 3, alle ⚠ und „C“.**
 
