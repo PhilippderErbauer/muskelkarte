@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="de" data-theme="hell">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Muskelkarte</title>
+<meta name="description" content="Tipp einen Muskel am 3D-Körper an und finde Übungen zum Kräftigen, Dehnen, Mobilisieren und Regenerieren. Mit Adventskalender.">
+<meta name="theme-color" content="#EEF1F6">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="32x32" href="./icons/favicon-32.png">
+<link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Muskelkarte">
+<link rel="stylesheet" href="./src/styles.css">
+<script>
+  // Erscheinungsbild vor dem ersten Zeichnen setzen, damit nichts aufblitzt
+  try {
+    var e = JSON.parse(localStorage.getItem('muskelkarte.v1') || '{}').einst || {};
+    var t = e.thema || 'auto';
+    if (t !== 'hell' && t !== 'dunkel') t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dunkel' : 'hell';
+    document.documentElement.dataset.theme = t;
+  } catch (x) {}
+</script>
+<script type="module" src="./src/app.js"></script>
+</head>
+<body>
+<div id="app">
+  <main id="view" tabindex="-1"></main>
+  <nav class="nav" id="nav" aria-label="Bereiche"></nav>
+</div>
+<div id="toast" role="status" aria-live="polite"></div>
+<noscript><p style="padding:24px">Die Muskelkarte braucht JavaScript.</p></noscript>
+</body>
+</html>
