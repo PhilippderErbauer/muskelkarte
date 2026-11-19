@@ -99,6 +99,50 @@ function pz(o) {
   if (o.lt) p.push(...o.lt);
   return p.map((v) => Math.round(v * 10) / 10);
 }
+// --- 3D: Posen mit Bewegung zur Seite und Drehung ---
+// voll(p) erweitert eine Pose auf alle 44 Werte (Format siehe src/three/puppe.js). Danach drehen die Helfer
+// einzelne Glieder um Schulter, Hüfte oder die Längsachse; dabei bleiben alle Glieder gleich lang.
+// Punkte: 0 Kopf, 1 Schulter, 2 Rumpfmitte, 3 Hüfte, 4–6 erstes Bein, 7–8 erster Arm, 9–11 zweites Bein, 12–13 zweiter Arm.
+const ZI = { 0: 32, 1: 33, 2: 34, 3: 35, 4: 36, 5: 37, 6: 38, 7: 28, 8: 29, 9: 39, 10: 40, 11: 41, 12: 30, 13: 31 };
+const ZM = { 9: -1, 10: -1, 11: -1, 12: -1, 13: -1 }; // zweite Seite wird als Abstand nach außen gespeichert
+function voll(p, fl = false) {
+  const df = fl ? 0 : 19, lz = fl ? 0 : 8, q = [];
+  for (let j = 0; j < 44; j++) q.push(p.length > j ? p[j] : j >= 42 ? 0 : j >= 36 ? lz : j >= 32 ? 0 : j >= 28 ? df : q[j - 10]);
+  return q;
+}
+const holen = (q, j) => [q[2 * j], q[2 * j + 1], q[ZI[j]] * (ZM[j] || 1)];
+function setzen(q, j, v) { q[2 * j] = v[0]; q[2 * j + 1] = v[1]; q[ZI[j]] = v[2] * (ZM[j] || 1); return q; }
+const runde = (q) => q.map((v) => Math.round(v * 10) / 10);
+// Punkte js um eine Achse durch m drehen. achse 'x': Querebene (positiv kippt nach oben Zeigendes zur Seite des
+// ersten Arms), 'y': um die Senkrechte (wie die Schulterdrehung), 'z': Seitenansicht (wie die Winkel in pz)
+function kippen(q, js, m, achse, grad) {
+  const c = Math.cos(grad * GRAD), s = Math.sin(grad * GRAD);
+  for (const j of js) {
+    const [x, y, z] = holen(q, j), dx = x - m[0], dy = y - m[1], dz = z - m[2];
+    let v;
+    if (achse === 'x') v = [x, m[1] + dy * c + dz * s, m[2] - dy * s + dz * c];
+    else if (achse === 'y') v = [m[0] + dx * c - dz * s, y, m[2] + dx * s + dz * c];
+    else v = [m[0] + dx * c + dy * s, m[1] - dx * s + dy * c, z];
+    setzen(q, j, v);
+  }
+  return q;
+}
+const GLIED = { a1: [[7, 8], 1, 'arm'], a2: [[12, 13], -1, 'arm'], b1: [[4, 5, 6], 1, 'bein'], b2: [[9, 10, 11], -1, 'bein'] };
+// Arm oder Bein seitlich abspreizen (Grad, positiv = nach außen), gedreht um Schulter bzw. Hüfte
+function seitlich(q, g, grad) {
+  const [js, seite, art] = GLIED[g], fl = q[28] === 0 && q[36] === 0;
+  const m = art === 'arm' ? [q[2], q[3] - 1, q[33] + seite * (fl ? 0 : 18)] : [q[6], q[7], q[35] + seite * (fl ? 0 : 8)];
+  return kippen(q, js, m, 'x', seite > 0 ? -grad : grad);
+}
+// Oberkörper um die Längsachse drehen (positiv = Schulter des ersten Arms nach hinten); die Arme drehen mit
+function drehen(q, grad, huefte = 0) {
+  kippen(q, [7, 8, 12, 13], [q[2], q[3], q[33]], 'y', grad);
+  q[42] += grad; q[43] += huefte;
+  return q;
+}
+// Oberkörper zur Seite neigen (positiv = zur Seite des ersten Arms), gedreht um die Hüfte
+const neigen = (q, grad) => kippen(q, [0, 1, 2, 7, 8, 12, 13], holen(q, 3), 'x', grad);
+const kopfNeigen = (q, grad) => kippen(q, [0], holen(q, 1), 'x', grad);
 const stuhl = (x, sitz = 116) => [['box', x, sitz, -22, x + 30, sitz + 4, 22], ['box', x + 1, sitz + 4, -21, x + 4, 150, -18], ['box', x + 1, sitz + 4, 18, x + 4, 150, 21], ['box', x + 26, sitz + 4, -21, x + 29, 150, -18], ['box', x + 26, sitz + 4, 18, x + 29, 150, 21]];
 
 // Punkte einer fertigen Pose gezielt versetzen: mit(p, { 2: [x, y] })
@@ -173,6 +217,59 @@ const curlTuchA = brueckeEin([112, 120], { ziel: [148, 150] }), curlTuchB = brue
 const tuchBein = (w) => { const h = [110, 142], kn = weiter(h, w, LG.os), fu = weiter(kn, w, LG.us), sc = weiter(h, 180, 42); return rueckenlage({ b1: [w, w, w + 90], b2: [-2, -2, 88], a1: { ziel: [sc[0] + (fu[0] - sc[0]) * 0.42, sc[1] + (fu[1] - sc[1]) * 0.42], knick: 1 }, lt: [19, 12, 19, 12] }); };
 const wadeKnie = (h) => pz({ h, r: 72, b1: { ziel: [142, 150] }, b2: { ziel: [98, 150] }, a1: { ziel: [176, 56] } });
 const zehenWand = (fw) => pz({ h: [100, 86], r: 93, b1: { ziel: [126, 150], fuss: fw } });
+
+// Welle 3 (3D)
+const plus = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
+const verschieben = (q, d, js = [0, 1, 2, 3, 7, 8, 12, 13]) => { for (const j of js) setzen(q, j, plus(holen(q, j), d)); return q; };
+const spiegelArm = (q) => { setzen(q, 12, [q[14], q[15], -q[28]]); setzen(q, 13, [q[16], q[17], -q[29]]); return q; };
+// Nacken: Hand seitlich am Kopf
+const nackenHand = (kn) => { const q = voll(sitzen()), S = holen(q, 1), K = holen(q, 0); setzen(q, 7, plus(S, [2, -10, 38])); setzen(q, 8, [K[0], K[1] + 1, 15]); return runde(kopfNeigen(q, kn)); };
+// Seitheben
+const seitheb = (w) => { const q = voll(pz({ h: [120, 86], a1: [-90, -90], a2: [-90, -90] })); seitlich(q, 'a1', w); seitlich(q, 'a2', w); return runde(q); };
+// Arm quer vor der Brust
+const armQuer = (z) => { const q = voll(pz({ h: [120, 86] })), S = holen(q, 1); setzen(q, 7, plus(S, [16, 3, 2 - z])); setzen(q, 8, plus(S, [12, 3, -20 - z])); setzen(q, 12, plus(S, [8, 20, -16])); setzen(q, 13, plus(S, [18, 6, -z])); return runde(q); };
+// Buch öffnen (Seitenlage): unterer Arm vorn am Boden, oberer Arm öffnet über oben nach hinten
+const seitBasis = () => { const q = voll(pz({ h: [120, 132], r: 0, k: 0 }), true); setzen(q, 0, [178, 136, 0]); setzen(q, 1, [162, 130, 0]); setzen(q, 2, [141, 131, 0]);
+  setzen(q, 4, [120, 140, 32]); setzen(q, 5, [88, 141, 32]); setzen(q, 6, [86, 147, 44]); setzen(q, 9, [120, 132, 32]); setzen(q, 10, [88, 133, 32]); setzen(q, 11, [86, 139, 44]);
+  setzen(q, 7, [162, 145, 24]); setzen(q, 8, [162, 146, 46]); return q; };
+const buch = (w) => { const q = seitBasis(); setzen(q, 12, [162, 128, 22]); setzen(q, 13, [162, 136, 42]); kippen(q, [12, 13], [162, 116, 0], 'x', w); return runde(q); };
+// Bizeps-Dehnung: Arm hinten seitlich an der Wand
+const bizepsWand = (d) => { const q = voll(pz({ h: [120, 86] })); drehen(q, d); const S = holen(q, 1); setzen(q, 7, plus(S, [-6, -1, 41])); setzen(q, 8, plus(S, [-11, -1, 62])); return runde(q); };
+// Handgelenke kreisen
+const handKreis = (dy, dz) => { const q = voll(pz({ h: [120, 86], a1: [-90, 0], a2: [-90, 0] })); setzen(q, 8, plus(holen(q, 8), [0, dy, dz])); setzen(q, 13, plus(holen(q, 13), [0, dy, -dz])); return runde(q); };
+// Russian Twist
+const twist = (d) => { const q = voll(pz({ h: [110, 136], r: 125, k: 115, b1: { ziel: [148, 150] }, a1: [-30, 20], lt: [20, 6, 20, 6] })); return runde(drehen(q, d)); };
+// Seitneigung im Stehen
+const neigung = (w) => runde(neigen(voll(pz({ h: [120, 86], a1: [92, 92], a2: [-90, -90] })), w));
+// Rumpf drehen im Sitzen, Arme vor der Brust gekreuzt
+const sitzDreh = (d) => { const q = voll(sitzen()), S = holen(q, 1); setzen(q, 7, plus(S, [14, 12, 10])); setzen(q, 8, plus(S, [6, 2, -12])); setzen(q, 12, plus(S, [14, 14, -10])); setzen(q, 13, plus(S, [6, 4, 12])); return runde(drehen(q, d)); };
+// Y-T-W in Bauchlage
+const ytw = (art, hoch) => { const q = voll(pz({ h: [124, 145], r: hoch ? 8 : 3, k: hoch ? 8 : 3, b1: [180, 180, 195] })), S = holen(q, 1), u = hoch ? -5 : 0;
+  const A = { Y: [[20, -4 + u, 30], [38, -6 + u, 42]], T: [[1, -3 + u, 42], [2, -5 + u, 64]], W: [[-10, -3 + u, 38], [8, -5 + u, 50]] }[art];
+  setzen(q, 7, plus(S, A[0])); setzen(q, 8, plus(S, A[1])); spiegelArm(q); return runde(q); };
+// Seitliche Rumpfdehnung am Türrahmen
+const latDehn = (w) => { const q = voll(pz({ h: [120, 86], a1: [94, 94], a2: [-60, -20] })); kippen(q, [7, 8], [q[2], q[3] - 1, 18], 'x', w * 1.4); neigen(q, w); setzen(q, 3, plus(holen(q, 3), [0, 0, -w * 0.3])); return runde(q); };
+// Scheibenwischer
+const wischer = (w) => { const q = voll(liegeBasis), S = holen(q, 1); setzen(q, 7, [S[0] + 1, 145, 34]); setzen(q, 8, [S[0] + 2, 147, 54]); spiegelArm(q); kippen(q, [4, 5, 6, 9, 10, 11], [110, 142, 0], 'x', w); return runde(q); };
+// Clamshell (Seitenlage, Knie gebeugt)
+const muschel = (auf) => { const q = seitBasis(); setzen(q, 4, [97, 141, 23]); setzen(q, 5, [75, 142, 2]); setzen(q, 6, [70, 147, 12]); setzen(q, 9, [97, 133 - auf, 23 - auf * 0.2]); setzen(q, 10, [75, 134, 2]); setzen(q, 11, [70, 139, 12]);
+  setzen(q, 12, [150, 120, 4]); setzen(q, 13, [128, 124, 4]); return runde(q); };
+// Figur 4 (Rückenlage, Knöchel auf dem Knie)
+const figur4 = (zug) => { const q = voll(liegeBasis), K2 = holen(q, 9); setzen(q, 4, [126, 124, 30]); setzen(q, 5, [K2[0], K2[1] - 6, 2]); setzen(q, 6, [K2[0] + 3, K2[1] - 10, -10]); kippen(q, [4, 5, 6, 9, 10, 11], [110, 142, 0], 'z', zug); return runde(q); };
+// Hüftkreisen im Vierfüßlerstand
+const hueftKreis = (beuge, ab, hoch) => { const q = voll(X(vier, {})), H = holen(q, 3); kippen(q, [4, 5, 6], [H[0], H[1], 8], 'z', beuge); seitlich(q, 'b1', ab); if (hoch) verschieben(q, [0, -hoch, 0], [4, 5, 6]); return runde(q); };
+// Schmetterling
+const schmetterling = (r, ky, kz) => { const q = voll(pz({ h: [110, 138], r, k: r - 5, a1: { ziel: [136, 143] }, lt: [16, 5, 16, 5] }));
+  setzen(q, 4, [130, ky, kz]); setzen(q, 5, [138, 147, 4]); setzen(q, 6, [144, 146, 10]); setzen(q, 9, [130, ky, -kz]); setzen(q, 10, [138, 147, -4]); setzen(q, 11, [144, 146, -10]); return runde(q); };
+// Seitlicher Ausfallschritt
+const seitAusfall = (tief) => { const q = voll(pz({ h: [120, 91], r: tief ? 80 : 90, a1: [-60, -10], a2: [-60, -10], lt: [19, 8, 19, 8] }));
+  if (!tief) { setzen(q, 4, [121, 120.5, 21]); setzen(q, 5, [122, 150, 34]); setzen(q, 6, [136, 150, 36]); setzen(q, 9, [121, 120.5, -21]); setzen(q, 10, [122, 150, -34]); setzen(q, 11, [136, 150, -36]); return runde(q); }
+  verschieben(q, [-2, 13, 14]); setzen(q, 4, [142, 127, 28]); setzen(q, 5, [124, 150, 34]); setzen(q, 6, [138, 150, 36]); setzen(q, 9, [120, 127, -14]); setzen(q, 10, [122, 150, -34]); setzen(q, 11, [136, 150, -36]); return runde(q); };
+// Fußkreisen im Sitzen
+const fussKreis = (dy, dz) => { const q = voll(sitzen({ b1: [2, -25, 75] })); setzen(q, 6, plus(holen(q, 6), [0, dy, dz])); return runde(q); };
+
+const KREIS_HAND = [[0, handKreis(-3.5, 0)], [0.25, handKreis(0, 3.5)], [0.5, handKreis(3.5, 0)], [0.75, handKreis(0, -3.5)], [1, handKreis(-3.5, 0)]];
+const KREIS_FUSS = [[0, fussKreis(-6, 0)], [0.25, fussKreis(0, 8)], [0.5, fussKreis(6, 0)], [0.75, fussKreis(0, -8)], [1, fussKreis(-6, 0)]];
 
 export const UEBUNGEN = {
   'wandsitzen': { n: 'Wandsitzen', m: 'kraft', h: ['quad'], nb: ['gesaess'], eq: 'Wand', lv: 1, min: 3, dos: { typ: 'zeit', sek: 30, s: 3 },
@@ -468,7 +565,80 @@ export const UEBUNGEN = {
   'fussspitzen-heben': { n: 'Fußspitzen heben an der Wand', m: 'kraft', h: ['schienbein'], nb: [], eq: 'Wand', lv: 1, min: 2, dos: { typ: 'wdh', n: 15, s: 3 },
     st: ['Mit dem Rücken an die Wand lehnen, die Fersen etwa eine Fußlänge davor.', 'Die Fußspitzen so weit wie möglich anheben, die Fersen bleiben am Boden.', 'Langsam absenken, ohne ganz abzulegen.'],
     f: ['Nicht mit dem Oberkörper schaukeln.', 'Langsam bewegen.'], le: 'Näher an der Wand stehen.', sw: 'Einbeinig ausführen.',
-    an: { d: 2.5, p: [wand(84)], a: [4, 5], k: [[0, zehenWand(0)], [0.45, zehenWand(38)], [0.55, zehenWand(38)], [1, zehenWand(0)]] } }
+    an: { d: 2.5, p: [wand(84)], a: [4, 5], k: [[0, zehenWand(0)], [0.45, zehenWand(38)], [0.55, zehenWand(38)], [1, zehenWand(0)]] } },
+  // ---------- Welle 3: Bewegungen zur Seite und Drehungen (Vorlage: free-exercise-db; Texte neu) ----------
+  'nacken-seitlich-halten': { n: 'Nacken halten gegen die Hand', m: 'kraft', h: ['nacken'], nb: ['schultern'], eq: 'Stuhl', lv: 1, min: 2, dos: { typ: 'zeit', sek: 8, s: 4 }, seiten: true,
+    st: ['Aufrecht sitzen und eine Hand seitlich an den Kopf legen, über dem Ohr.', 'Den Kopf sanft gegen die Hand drücken, die Hand hält dagegen. Der Kopf bewegt sich dabei nicht.', '8 Sekunden halten, lösen und die Seite wechseln. Danach auch Stirn und Hinterkopf.'],
+    f: ['Nur mit wenig Kraft drücken.', 'Nicht die Luft anhalten.'], le: 'Kürzer halten.', sw: 'Etwas fester drücken, weiterhin ohne Bewegung.',
+    an: { d: 5, y: -1.1, as: 1, p: stuhl(82, 126), a: [0, 1], k: [[0, nackenHand(0)], [0.3, nackenHand(4)], [0.8, nackenHand(4)], [1, nackenHand(0)]] } },
+  'seitheben': { n: 'Seitheben mit Band oder Flaschen', m: 'kraft', h: ['schultern'], nb: ['nacken'], eq: 'Kurzhanteln', lv: 1, min: 3, dos: { typ: 'wdh', n: 12, s: 3 },
+    st: ['Aufrecht stehen, in jeder Hand eine Flasche oder Kurzhantel, die Arme hängen seitlich.', 'Die Arme mit leicht gebeugten Ellbogen seitlich bis auf Schulterhöhe heben.', 'Kurz halten und langsam absenken.'],
+    f: ['Die Schultern nicht zu den Ohren ziehen.', 'Nicht über Schulterhöhe heben und nicht mit Schwung arbeiten.'], le: 'Leichtere Flaschen oder nur bis zur halben Höhe.', sw: '3 Sekunden absenken.',
+    an: { d: 3.5, y: -1.3, p: [['hantel', 8], ['hantel', 13]], a: [1, 7, 8], k: [[0, seitheb(4)], [0.4, seitheb(84)], [0.55, seitheb(84)], [1, seitheb(4)]] } },
+  'arm-quer': { n: 'Arm quer vor der Brust', m: 'dehn', h: ['schultern'], nb: ['oruecken'], eq: 'Ohne Geräte', lv: 1, min: 2, dos: { typ: 'zeit', sek: 30, s: 2 }, seiten: true,
+    st: ['Aufrecht stehen und einen Arm gestreckt auf Schulterhöhe vor die Brust führen.', 'Mit der anderen Hand den Arm oberhalb des Ellbogens sanft heranziehen.', 'Halten, bis es hinten an der Schulter zieht, dann die Seite wechseln.'],
+    f: ['Die Schulter bleibt unten.', 'Den Oberkörper nicht mitdrehen.'], le: 'Weniger heranziehen.', sw: 'Den Arm etwas tiefer oder höher führen, um andere Stellen zu dehnen.',
+    an: { d: 6, y: -1.1, as: 1, a: [1, 7, 8], k: [[0, armQuer(0)], [0.35, armQuer(4)], [0.8, armQuer(4)], [1, armQuer(0)]] } },
+  'buch-oeffnen': { n: 'Brustkorb aufdrehen in Seitenlage', m: 'mobil', h: ['brust'], nb: ['oruecken'], eq: 'Matte', lv: 1, min: 3, dos: { typ: 'wdh', n: 8, s: 2 }, seiten: true,
+    st: ['Seitlage, Hüfte und Knie im rechten Winkel gebeugt, beide Arme liegen gestreckt vor dir.', 'Den oberen Arm in einem Bogen über oben nach hinten öffnen, der Blick folgt der Hand.', 'Die Knie bleiben aufeinander. Kurz halten und langsam zurück. Danach die Seite wechseln.'],
+    f: ['Die Knie nicht auseinandergleiten lassen.', 'Nur so weit öffnen, wie es angenehm ist.'], le: 'Ein Kissen unter den Kopf legen und kleiner öffnen.', sw: 'Hinten 3 Sekunden halten und tief einatmen.',
+    an: { d: 6, fl: 1, y: 2.5, as: 1, a: [1, 12, 13], k: [[0, buch(0)], [0.4, buch(-150)], [0.6, buch(-150)], [1, buch(0)]] } },
+  'bizeps-wand': { n: 'Bizeps-Dehnung an der Wand', m: 'dehn', h: ['bizeps'], nb: ['brust', 'schultern'], eq: 'Wand', lv: 1, min: 2, dos: { typ: 'zeit', sek: 30, s: 2 }, seiten: true,
+    st: ['Seitlich neben eine Wand stellen und die Handfläche hinter dir auf Schulterhöhe an die Wand legen, der Arm ist gestreckt.', 'Den Oberkörper langsam von der Wand wegdrehen.', 'Halten, bis es vorn am Oberarm zieht, dann die Seite wechseln.'],
+    f: ['Den Ellbogen nicht durchdrücken.', 'Langsam drehen, nicht ruckartig.'], le: 'Die Hand tiefer an die Wand legen.', sw: 'Weiter wegdrehen.',
+    an: { d: 6, y: 2.7, as: 1, p: [['box', 60, -8, 66, 160, 150, 69]], a: [1, 7, 8], k: [[0, bizepsWand(0)], [0.35, bizepsWand(-22)], [0.8, bizepsWand(-22)], [1, bizepsWand(0)]] } },
+  'handgelenke-kreisen': { n: 'Handgelenke kreisen', m: 'mobil', h: ['unterarme'], nb: [], eq: 'Ohne Geräte', lv: 1, min: 2, dos: { typ: 'wdh', n: 10, s: 2 },
+    st: ['Aufrecht stehen, die Ellbogen am Körper, die Unterarme zeigen nach vorn.', 'Die Hände locker zu Fäusten schließen und die Handgelenke langsam kreisen lassen.', '10 Kreise, dann die Richtung wechseln.'],
+    f: ['Die Unterarme bleiben ruhig, nur die Handgelenke bewegen sich.', 'Die Kreise so groß, wie es schmerzfrei geht.'], le: 'Kleinere Kreise.', sw: 'Mit geöffneten Händen und gespreizten Fingern.',
+    an: { d: 2.4, lin: true, y: -0.9, a: [7, 8], k: KREIS_HAND } },
+  'russian-twist': { n: 'Russian Twist', m: 'kraft', h: ['seitbauch'], nb: ['bauch'], eq: 'Matte', lv: 2, min: 3, dos: { typ: 'wdh', n: 16, s: 2 },
+    st: ['Auf den Boden setzen, die Knie gebeugt, die Fersen am Boden.', 'Mit geradem Rücken leicht nach hinten lehnen und die Hände vor der Brust zusammenführen.', 'Den Oberkörper abwechselnd nach rechts und links drehen, die Hände folgen.'],
+    f: ['Der Rücken bleibt lang, nicht rund.', 'Aus dem Rumpf drehen, nicht nur die Arme schwingen.'], le: 'Weniger weit zurücklehnen.', sw: 'Die Füße vom Boden abheben oder eine Flasche halten.',
+    an: { d: 3, y: -0.9, a: [1, 2], k: [[0, twist(0)], [0.25, twist(38)], [0.5, twist(0)], [0.75, twist(-38)], [1, twist(0)]] } },
+  'seitneigung': { n: 'Seitneigung im Stehen', m: 'dehn', h: ['seitbauch'], nb: ['oruecken'], eq: 'Ohne Geräte', lv: 1, min: 2, dos: { typ: 'zeit', sek: 20, s: 2 }, seiten: true,
+    st: ['Hüftbreit stehen und einen Arm gestreckt nach oben führen.', 'Den Oberkörper langsam zur anderen Seite neigen, als würdest du über einen Ball greifen.', 'Halten, bis es in der Flanke zieht, langsam aufrichten und die Seite wechseln.'],
+    f: ['Nicht nach vorn oder hinten kippen, nur zur Seite.', 'Die Hüfte bleibt über den Füßen.'], le: 'Die Hand auf den Kopf statt gestreckt.', sw: 'Beide Arme über den Kopf.',
+    an: { d: 6, y: -1.3, as: 1, a: [1, 2, 3], k: [[0, neigung(0)], [0.35, neigung(-20)], [0.8, neigung(-20)], [1, neigung(0)]] } },
+  'rumpf-drehen': { n: 'Rumpf drehen im Sitzen', m: 'mobil', h: ['seitbauch'], nb: ['oruecken'], eq: 'Stuhl', lv: 1, min: 2, dos: { typ: 'wdh', n: 10, s: 2 },
+    st: ['Aufrecht auf einen Stuhl setzen, die Füße fest am Boden, die Arme vor der Brust gekreuzt.', 'Den Oberkörper langsam zu einer Seite drehen, das Becken bleibt gerade.', 'Zurück zur Mitte und zur anderen Seite drehen.'],
+    f: ['Die Knie bleiben nebeneinander.', 'Aufrecht bleiben, nicht zusammensinken.'], le: 'Kleinerer Bewegungsumfang.', sw: 'Am Ende jeweils 3 Sekunden halten.',
+    an: { d: 5, y: -0.9, p: stuhl(82, 126), a: [1, 2], k: [[0, sitzDreh(0)], [0.25, sitzDreh(40)], [0.5, sitzDreh(0)], [0.75, sitzDreh(-40)], [1, sitzDreh(0)]] } },
+  'ytw': { n: 'Y-T-W in Bauchlage', m: 'kraft', h: ['oruecken'], nb: ['schultern', 'uruecken'], eq: 'Matte', lv: 1, min: 3, dos: { typ: 'wdh', n: 6, s: 2 },
+    st: ['Bauchlage, die Stirn auf einem kleinen Handtuch.', 'Die Arme nacheinander in die Form Y (schräg nach vorn), T (zur Seite) und W (Ellbogen gebeugt) bringen und jeweils wenige Zentimeter anheben.', 'Die Schulterblätter dabei nach hinten unten ziehen, jede Position kurz halten.'],
+    f: ['Den Kopf nicht in den Nacken legen.', 'Nur so hoch heben, wie es ohne Hohlkreuz geht.'], le: 'Nur Y und T.', sw: 'Jede Position 3 Sekunden halten.',
+    an: { d: 9, y: 2.6, a: [1, 7, 8], k: [[0, ytw('Y', 0)], [0.1, ytw('Y', 1)], [0.25, ytw('Y', 1)], [0.38, ytw('T', 1)], [0.53, ytw('T', 1)], [0.66, ytw('W', 1)], [0.81, ytw('W', 1)], [0.92, ytw('W', 0)], [1, ytw('Y', 0)]] } },
+  'lat-dehnung': { n: 'Seitliche Rumpfdehnung am Türrahmen', m: 'dehn', h: ['oruecken'], nb: ['seitbauch'], eq: 'Türrahmen', lv: 1, min: 2, dos: { typ: 'zeit', sek: 30, s: 2 }, seiten: true,
+    st: ['Seitlich neben einen Türrahmen stellen.', 'Den äußeren Arm über den Kopf führen und den Rahmen fassen, die andere Hand greift auf Hüfthöhe.', 'Die Hüfte vom Rahmen wegschieben, bis es seitlich am Rücken zieht. Halten, dann die Seite wechseln.'],
+    f: ['Nicht nach vorn beugen.', 'Ruhig in die gedehnte Seite atmen.'], le: 'Ohne Rahmen, die Hand nur nach oben strecken.', sw: 'Einen Schritt weiter weg stellen.',
+    an: { d: 6, y: -1.3, as: 1, p: [['box', 117, -8, -48, 123, 150, -44]], a: [1, 7, 8], k: [[0, latDehn(0)], [0.35, latDehn(-16)], [0.8, latDehn(-16)], [1, latDehn(0)]] } },
+  'scheibenwischer': { n: 'Knie zur Seite fallen lassen', m: 'mobil', h: ['uruecken'], nb: ['seitbauch', 'gesaess'], eq: 'Matte', lv: 1, min: 2, dos: { typ: 'wdh', n: 10, s: 2 },
+    st: ['Rückenlage, die Knie aufgestellt, die Arme seitlich ausgestreckt.', 'Beide Knie langsam zu einer Seite sinken lassen, die Schultern bleiben am Boden.', 'Zurück zur Mitte und zur anderen Seite.'],
+    f: ['Die Schultern heben nicht ab.', 'Langsam und ohne Schwung.'], le: 'Nur halb so weit sinken lassen.', sw: 'Die Füße vom Boden abheben.',
+    an: { d: 6, y: -0.9, a: [2, 3], k: [[0, wischer(0)], [0.25, wischer(42)], [0.5, wischer(0)], [0.75, wischer(-42)], [1, wischer(0)]] } },
+  'clamshell': { n: 'Clamshell (Muschel)', m: 'kraft', h: ['gesaess'], nb: [], eq: 'Matte', lv: 1, min: 3, dos: { typ: 'wdh', n: 15, s: 2 }, seiten: true,
+    st: ['Seitlage, die Knie leicht gebeugt, die Füße aufeinander.', 'Die Füße bleiben zusammen, das obere Knie öffnet sich wie eine Muschel.', 'Kurz halten und langsam schließen. Danach die Seite wechseln.'],
+    f: ['Das Becken nicht nach hinten kippen lassen.', 'Langsam bewegen.'], le: 'Kleinerer Bewegungsumfang.', sw: 'Ein Widerstandsband um die Knie legen.',
+    an: { d: 3, fl: 1, y: -0.6, as: 1, a: [3, 9], k: [[0, muschel(0)], [0.4, muschel(16)], [0.55, muschel(16)], [1, muschel(0)]] } },
+  'figur-4': { n: 'Gesäß-Dehnung in Rückenlage (Figur 4)', m: 'dehn', h: ['gesaess'], nb: [], eq: 'Matte', lv: 1, min: 2, dos: { typ: 'zeit', sek: 30, s: 2 }, seiten: true,
+    st: ['Rückenlage, beide Knie aufgestellt.', 'Einen Knöchel auf das andere Knie legen, das Knie zeigt nach außen.', 'Das untere Bein vom Boden heben und sanft zur Brust ziehen, bis es im Gesäß zieht. Dann die Seite wechseln.'],
+    f: ['Den Kopf am Boden lassen.', 'Den Fuß des oberen Beins anziehen, das schützt das Knie.'], le: 'Den Fuß des unteren Beins am Boden lassen.', sw: 'Das untere Bein weiter heranziehen.',
+    an: { d: 6, y: -0.8, as: 1, a: [3, 4], k: [[0, figur4(0)], [0.35, figur4(28)], [0.8, figur4(28)], [1, figur4(0)]] } },
+  'hueftkreisen': { n: 'Hüftkreisen im Vierfüßlerstand', m: 'mobil', h: ['gesaess'], nb: ['hueftbeuger'], eq: 'Matte', lv: 1, min: 2, dos: { typ: 'wdh', n: 8, s: 2 }, seiten: true,
+    st: ['Vierfüßlerstand: Hände unter den Schultern, Knie unter der Hüfte.', 'Ein Knie leicht anheben und mit ihm große Kreise beschreiben: nach vorn, zur Seite, nach hinten.', '8 Kreise, dann die Richtung und die Seite wechseln.'],
+    f: ['Der Rücken bleibt ruhig und gerade.', 'Die Bewegung kommt aus der Hüfte.'], le: 'Kleinere Kreise.', sw: 'Langsamer und größer kreisen.',
+    an: { d: 4, lin: true, y: -0.6, as: 1, a: [3, 4], k: [[0, hueftKreis(0, 0, 3)], [0.25, hueftKreis(-28, 8, 4)], [0.5, hueftKreis(0, 50, 0)], [0.75, hueftKreis(18, 14, 8)], [1, hueftKreis(0, 0, 3)]] } },
+  'schmetterling': { n: 'Schmetterling', m: 'dehn', h: ['addu'], nb: [], eq: 'Matte', lv: 1, min: 2, dos: { typ: 'zeit', sek: 30, s: 2 },
+    st: ['Aufrecht sitzen, die Fußsohlen zusammenlegen, die Knie fallen nach außen.', 'Die Füße mit den Händen umfassen.', 'Mit geradem Rücken leicht nach vorn neigen und die Knie sinken lassen. Halten.'],
+    f: ['Nicht auf die Knie drücken.', 'Der Rücken bleibt lang.'], le: 'Die Füße weiter vom Körper weg.', sw: 'Die Fersen näher heranziehen.',
+    an: { d: 6, y: -1.2, a: [3, 4], k: [[0, schmetterling(95, 128, 30)], [0.35, schmetterling(78, 133, 33)], [0.8, schmetterling(78, 133, 33)], [1, schmetterling(95, 128, 30)]] } },
+  'seitlicher-ausfallschritt': { n: 'Seitlicher Ausfallschritt', m: 'mobil', h: ['addu'], nb: ['quad', 'gesaess'], eq: 'Ohne Geräte', lv: 1, min: 3, dos: { typ: 'wdh', n: 8, s: 2 },
+    st: ['Breit stehen, die Füße zeigen leicht nach außen.', 'Das Gewicht zu einer Seite verlagern und dieses Knie beugen, das andere Bein bleibt gestreckt.', 'Kurz halten, bis es innen am gestreckten Bein zieht, dann zur anderen Seite wechseln.'],
+    f: ['Das gebeugte Knie zeigt in Richtung der Zehen.', 'Die Fersen bleiben am Boden.'], le: 'Weniger tief gehen.', sw: 'Tiefer gehen und unten 3 Sekunden halten.',
+    an: { d: 4, y: -1.35, as: 1, a: [9, 10], k: [[0, seitAusfall(0)], [0.4, seitAusfall(1)], [0.6, seitAusfall(1)], [1, seitAusfall(0)]] } },
+  'fusskreisen': { n: 'Fußkreisen', m: 'mobil', h: ['waden'], nb: ['schienbein'], eq: 'Stuhl', lv: 1, min: 2, dos: { typ: 'wdh', n: 10, s: 2 }, seiten: true,
+    st: ['Auf einen Stuhl setzen und ein Bein gestreckt nach vorn heben.', 'Mit der Fußspitze langsam große Kreise malen.', '10 Kreise, dann die Richtung und das Bein wechseln.'],
+    f: ['Das Bein bleibt ruhig, nur der Fuß bewegt sich.', 'Langsam und so groß wie möglich.'], le: 'Die Ferse auf dem Boden lassen.', sw: 'Mit der Fußspitze das Alphabet schreiben.',
+    an: { d: 3, lin: true, y: -0.7, as: 1, p: stuhl(82, 126), a: [5, 6], k: KREIS_FUSS } }
 };
 
 export const LEVEL = ['', 'Einsteiger', 'Fortgeschritten', 'Profi'];

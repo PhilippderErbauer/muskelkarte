@@ -7,7 +7,7 @@ Die ganze Idee steht in [KONZEPT.md](KONZEPT.md).
 ## Was drin ist
 
 - **3D-Körper** mit 17 Muskelgruppen: anatomischer Körper aus [open-anatomy-3d](https://github.com/MervinR07/open-anatomy-3d) / BodyParts3D, die Muskelflächen liegen dort, wo die Muskeln wirklich unter der Haut sitzen. Drehen, zoomen (zwei Finger oder Mausrad), antippen. Die Kamera fährt zum gewählten Muskel.
-- **73 Übungen** mit Anleitung, typischen Fehlern, leichter/schwerer, beteiligten Muskeln und 3D-Animation (Tempo 0,5×–1,5×, frei drehbar). Geplanter Ausbau auf rund 100 in [UEBUNGSLISTE.md](UEBUNGSLISTE.md)
+- **91 Übungen** mit Anleitung, typischen Fehlern, leichter/schwerer, beteiligten Muskeln und 3D-Animation (Tempo 0,5×–1,5×, frei drehbar). Geplanter Ausbau auf rund 100 in [UEBUNGSLISTE.md](UEBUNGSLISTE.md)
 - **Ablauf-Modus** mit Timer, Stoppuhr, Sätzen, Pausen, Ton/Vibration; der Bildschirm bleibt an
 - **Entdecken:** Suche, Filter, 9 Themen („Nacken nach dem Bürotag“, „Starke Beine ohne Geräte“ …), Liste nach Region
 - **Training:** 4 fertige Routinen und eigene Routinen (anlegen, sortieren, umbenennen)
@@ -78,7 +78,7 @@ tools/
 ## Inhalte erweitern
 
 - **Körper anpassen:** Welche Muskeln des Modells zu welcher Muskelgruppe gehören, steht in `GRUPPEN` in `tools/koerper-umrechnen.mjs`. Nach einer Änderung das Skript neu laufen lassen (Anleitung im Kopf der Datei). Linienabstand und Farben stehen in `src/three/figurstil.js` und `FARBEN` in `src/buehne.js`. Der alte, selbst erzeugte Körper (`src/three/figur.js`) springt nur ein, wenn `koerper.bin` nicht geladen werden kann. Der Look steht in `src/app.js` (`stil`); `skulptur` und `flach` sind als Alternativen weiterhin eingebaut.
-- **Neue Übung:** Eintrag in `src/data/uebungen.js` ergänzen. Die Animation sind ein paar Schlüsselposen (Format oben in `src/three/puppe.js`). Am einfachsten mit `pz({ ... })`: Posen aus Gelenkwinkeln und Zielpunkten (Hand auf den Boden, Fuß an die Wand), die Glieder bleiben dabei immer gleich lang. Requisiten: Wand, Stuhl, Ball, Faszienrolle, Band, Hantel.
+- **Neue Übung:** Eintrag in `src/data/uebungen.js` ergänzen. Die Animation sind ein paar Schlüsselposen (Format oben in `src/three/puppe.js`). Am einfachsten mit `pz({ ... })`: Posen aus Gelenkwinkeln und Zielpunkten (Hand auf den Boden, Fuß an die Wand), die Glieder bleiben dabei immer gleich lang. Für Bewegungen zur Seite und Drehungen die Pose mit `voll(...)` erweitern und mit `seitlich`, `drehen`, `neigen` oder `kippen` bearbeiten. Requisiten: Wand, Stuhl, Ball, Faszienrolle, Band, Handtuch, Stab, Hantel.
 - **Neuer Adventskalender:** `src/data/advent-2026.js` kopieren, z. B. als `advent-2027.js`, Inhalte ersetzen, in `src/advent.js` unter `KALENDER` eintragen und in `sw.js` ergänzen.
 - Danach `node tools/pruefen.mjs` ausführen: Es meldet fehlende Texte, unbekannte Muskeln oder kaputte Posen.
 

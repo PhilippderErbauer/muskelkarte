@@ -1,6 +1,6 @@
 # Übungsliste: Ausbau von 25 auf rund 100 Übungen
 
-> **Stand:** 19. November 2026 · **Status:** Welle 1 und 2 sind eingebaut (48 Übungen, alle „A“ und „B“ mit ✓). Der Rest ist Entwurf.
+> **Stand:** 19. November 2026 · **Status:** Welle 1–3 sind eingebaut (66 neue Übungen: alle ✓ mit „A“ und „B“ und alle ⚠). Offen sind nur noch die 12 Varianten mit „C“.
 > Abgleich mit [free-exercise-db](https://github.com/yuhonas/free-exercise-db) (gemeinfrei). Die Spalte *Vorlage* nennt die passende englische Übung dort. Übernommen werden nur Idee und Zuordnung, alle Texte entstehen neu auf Deutsch.
 
 ## So liest du die Liste
@@ -253,8 +253,9 @@ Wandsitzen, Langsame Kniebeuge, Glute Bridge, Unterarmstütz, Liegestütz, Waden
 
 1. ✅ **Welle 1, alle „A“ mit ✓ (25 Übungen, eingebaut am 19.11.):** schließt die Lücken auf der Körperkarte, ohne die Puppe umzubauen. IDs in `src/data/uebungen.js`: kinn-einziehen, kopf-schieben, nacken-ball, arm-pendeln, rolle-atmen, bizeps-curl, trizeps-dehnung, handgelenk-curls, unterarm-dehnen, unterarm-ausrollen, kobra, becken-kippen, rudern-band, ruecken-rund, oberer-ruecken-rollen, stufenlagerung, gesaess-ball, knieheben, bein-schwingen, quad-dehnung, quad-rollen, kreuzheben-einbeinig, raupe, kissen-druecken, schienbein-dehnung. Vereinfacht dargestellt: Handgelenk-Curls (die Puppe hat kein Handgelenk, der Unterarm kippt) und Kissen drücken (ohne sichtbare Bewegung).
 2. ✅ **Welle 2, „B“ mit ✓ (23 Übungen, eingebaut am 19.11.):** zweite Übung je Gruppe, dazu drei neue Themen: „Starke Beine ohne Geräte“, „Schreibtisch: Nacken und Schultern“, „Ausrollen mit Rolle und Ball“. IDs: kinn-zur-brust, pike-liegestuetz, wand-liegestuetz, knie-liegestuetz, handtuch-curl, enge-liegestuetze, ball-druecken, crunch, seitstuetz-dips, tisch-rudern, hueftbeuge-stab, knie-zur-brust, glute-bridge-einbeinig, ausfallschritt-rueckwaerts, bein-seitlich-heben, bein-heben-liegend, ausfallschritt, step-up, beincurl-handtuch, beinrueckseite-handtuch, adduktoren-seitlage, wadendehnung-knie, fussspitzen-heben. Vereinfacht: „Ball kräftig drücken“ ohne sichtbare Bewegung.
-3. **Puppe ausbauen:** echte 3D-Gelenkwinkel, damit Seitheben, Drehungen und Bewegungen zur Seite sauber aussehen.
-4. **Welle 3, alle ⚠ und „C“.**
+3. ✅ **Puppe ausgebaut (19.11.):** Beine können zur Seite, der Rumpf kann sich drehen und neigen, der Kopf zur Seite. Helfer in `src/data/uebungen.js`: `voll`, `seitlich`, `drehen`, `neigen`, `kopfNeigen`, `kippen`, `setzen`. Alle bisherigen Animationen sind nachweislich unverändert (pixelgleich).
+4. ✅ **Welle 3, alle ⚠ (18 Übungen, eingebaut am 19.11.):** nacken-seitlich-halten, seitheben, arm-quer, buch-oeffnen, bizeps-wand, handgelenke-kreisen, russian-twist, seitneigung, rumpf-drehen, ytw, lat-dehnung, scheibenwischer, clamshell, figur-4, hueftkreisen, schmetterling, seitlicher-ausfallschritt, fusskreisen. Vereinfacht: Handgelenke kreisen und Fußkreisen (die Puppe hat kein Handgelenk; Hand bzw. Fußspitze beschreiben den Kreis).
+5. **Offen: die 12 Varianten mit „C“** (z. B. Hollow Hold, Bulgarische Kniebeuge).
 
 Pro Welle schreibe ich Texte (Schritte, typische Fehler, leichter/schwerer, Dosierung) und Posen. Das Prüfskript kontrolliert alles, und ich sehe mir jede Figur als Bild an. **Vor dem Veröffentlichen sollte jemand mit Sport- oder Physio-Hintergrund die Texte gegenlesen.**
 

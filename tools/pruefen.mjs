@@ -25,7 +25,7 @@ for (const [id, u] of Object.entries(UEBUNGEN)) {
   for (const m of u.h.concat(u.nb)) pruef(MUSKELN[m], `${id}: Muskel ${m} unbekannt`);
   pruef(u.st.length >= 3 && u.f.length >= 1 && u.le && u.sw, `${id}: Anleitung unvollständig`);
   pruef(u.lv >= 1 && u.lv <= 3 && u.min > 0, `${id}: Level oder Dauer fehlt`);
-  for (const k of u.an.k) pruef([18, 24, 28, 32].includes(k[1].length), `${id}: Pose mit ${k[1].length} Werten`);
+  for (const k of u.an.k) pruef([18, 24, 28, 32, 44].includes(k[1].length), `${id}: Pose mit ${k[1].length} Werten`);
   for (let t = 0; t < u.an.d; t += 0.37) {
     const m = puppe(pose(u.an, t), u.an, farben).mesh;
     if (m.P.some((v) => !Number.isFinite(v))) { fehler.push(`${id}: ungültige Puppe bei t=${t}`); break; }
