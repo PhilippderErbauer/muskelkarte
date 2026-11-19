@@ -11,7 +11,7 @@ const neu = () => ({
   fav: {},         // Übungs-ID: true
   verlauf: [],     // { d: "2026-12-07", ts, id }
   routinen: [],    // { id, n, ids: [] }
-  einst: { thema: 'auto', ton: true },
+  einst: { thema: 'auto', ton: true, fehlt: {} }, // fehlt: Geräte-ID: true (nicht vorhanden)
   willkommen: false
 });
 
@@ -26,6 +26,7 @@ function pruefe(o) {
   const e = obj(o.einst);
   if (['auto', 'hell', 'dunkel'].includes(e.thema)) n.einst.thema = e.thema;
   if (typeof e.ton === 'boolean') n.einst.ton = e.ton;
+  for (const [k, v] of Object.entries(obj(e.fehlt))) if (v === true && /^[a-z]{2,12}$/.test(k)) n.einst.fehlt[k] = true;
   n.willkommen = !!o.willkommen;
   return n;
 }

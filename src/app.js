@@ -2,7 +2,7 @@
 // Seiten, Navigation (Hash-Routing, funktioniert auf GitHub Pages), Ablauf-Modus und Einstellungen.
 
 import { MODI, MUSKELN, REGIONEN } from './data/muskeln.js';
-import { UEBUNGEN as U, THEMEN, ROUTINEN, LEVEL, liste, modusName } from './data/uebungen.js';
+import { UEBUNGEN as U, THEMEN, ROUTINEN, LEVEL, GERAETE, geraeteVon, liste as alleListe, modusName } from './data/uebungen.js';
 import { KALENDER, adventStatus, zugang, blockIndex } from './advent.js';
 import { store, isoTag } from './store.js';
 import { FARBEN, KoerperBuehne, PuppenBuehne, koerperBild, koerperCanvas, netz, netzFertig } from './buehne.js';
@@ -67,6 +67,11 @@ function wendeThemaAn() {
 const KB = new KoerperBuehne((id) => waehle(id));
 const PB = new PuppenBuehne();
 
+// Meine Geräte: Übungen, für die ein Gerät fehlt, werden in Panel, Heatmap und Entdecken ausgeblendet
+const fehlendeGeraete = () => store.d.einst.fehlt || {};
+const moeglich = (id) => !geraeteVon(U[id]).some((g) => fehlendeGeraete()[g]);
+const gefiltert = () => Object.values(fehlendeGeraete()).some(Boolean);
+const liste = (mid, modus) => alleListe(mid, modus).filter(moeglich);
 function heatmap(modus) {
   if (!modus) return null;
   const n = {}; let mx = 1;
@@ -192,9 +197,14 @@ function panel() {
     <p>${esc(m.w)}</p>
     <div class="seg seg-tabs" role="group" aria-label="Trainingsart">${tabs}</div>
     <div class="liste">${ids.length ? ids.map(zeile).join('') : '<p class="muted klein">Für diese Trainingsart gibt es hier noch keine Übung.</p>'}</div>
+    ${ausgeblendet(alleListe(id, S.ptab).length - ids.length)}
     ${gegen}
     <p class="fakt"><b>Wusstest du?</b> ${esc(m.k)}</p>
   </section>`;
+}
+
+function ausgeblendet(n) {
+  return n > 0 ? `<p class="klein muted">${n === 1 ? 'Eine weitere Übung braucht' : n + ' weitere Übungen brauchen'} Geräte, die du nicht ausgewählt hast. <a href="#/ich">Geräte ändern</a></p>` : '';
 }
 
 function panelLeer() {
@@ -248,14 +258,14 @@ const suchtext = (id) => { const u = U[id]; return (u.n + ' ' + modusName(u.m) +
 function trefferHTML() {
   const q = S.q.trim().toLowerCase();
   if (q) {
-    let ids = Object.keys(U).filter((id) => suchtext(id).includes(q));
+    let ids = Object.keys(U).filter((id) => suchtext(id).includes(q) && moeglich(id));
     const filter = `<div class="chips" role="group" aria-label="Nach Trainingsart filtern">${[['', 'Alle']].concat(MODI.map((m) => [m.id, m.n])).map(([v, l]) => `<button class="chip${S.fModus === v ? ' voll' : ''}" data-a="fmodus" data-v="${v}" aria-pressed="${S.fModus === v}">${l}</button>`).join('')}</div>`;
     if (S.fModus) ids = ids.filter((id) => U[id].m === S.fModus);
     return filter + (ids.length ? `<div class="liste">${ids.map(zeile).join('')}</div>` : '<p class="muted">Nichts gefunden. Probier einen Muskel wie „Wade“ oder eine Trainingsart wie „Dehnen“.</p>');
   }
   return `<section class="block"><h2>Für den Moment</h2><div class="raster2">${THEMEN.map((t, i) => `<a class="kachel" href="#/thema/${i}"><b>${esc(t.n)}</b><span class="klein muted">${t.ids.length} Übungen</span></a>`).join('')}</div></section>
     <section class="block"><h2>Nach Region</h2><div class="chips">${Object.keys(MUSKELN).map((id) => `<a class="chip" href="#/koerper/${id}">${esc(MUSKELN[id].n)}</a>`).join('')}</div></section>
-    <section class="block"><h2>Alle Übungen</h2>${MODI.map((m) => { const ids = Object.keys(U).filter((id) => U[id].m === m.id); return `<h3 class="unterkopf">${m.n} <span class="muted">${ids.length}</span></h3><div class="liste">${ids.map(zeile).join('')}</div>`; }).join('')}</section>`;
+    <section class="block"><h2>Alle Übungen</h2>${gefiltert() ? `<p class="klein muted">Nur Übungen, die mit deinen Geräten gehen. <a href="#/ich">Geräte ändern</a></p>` : ''}${MODI.map((m) => { const ids = Object.keys(U).filter((id) => U[id].m === m.id && moeglich(id)); return `<h3 class="unterkopf">${m.n} <span class="muted">${ids.length}</span></h3><div class="liste">${ids.map(zeile).join('')}</div>`; }).join('')}</section>`;
 }
 function vEntdecken() {
   return `<div class="seite"><h1>Entdecken</h1>
@@ -313,6 +323,26 @@ function fortschrittIntens(kal, jahr) {
   });
   return o;
 }
+// Adventskerzen: die vier Sonntage vor dem 25. Dezember. Im Rückblick brennen alle vier.
+function kerzenAn(z) {
+  if (z.modus !== 'aktiv') return 4;
+  const w = new Date(z.jahr, 11, 24), vierter = 24 - w.getDay(), heute = new Date(z.jahr, 11, z.heute);
+  return [3, 2, 1, 0].filter((k) => new Date(z.jahr, 11, vierter - 7 * k) <= heute).length;
+}
+function kerzenHTML(n) {
+  const kerze = (i) => { const an = i < n, x = 6 + i * 22, h = 26 - i * 3;
+    return `<rect x="${x}" y="${44 - h}" width="12" height="${h}" rx="3" class="kerze${an ? ' an' : ''}"/><line x1="${x + 6}" y1="${44 - h}" x2="${x + 6}" y2="${41 - h}" class="docht"/>${an ? `<path d="M${x + 6} ${30 - h}c3.5 4 4 7 0 11c-4-4-3.5-7 0-11z" class="flamme"/>` : ''}`; };
+  return `<svg class="kerzen" viewBox="0 0 96 48" role="img" aria-label="${n === 0 ? 'Noch keine Kerze' : n + ' von 4 Kerzen brennen'}">${[0, 1, 2, 3].map(kerze).join('')}</svg>`;
+}
+// Abzeichen: eins je geschaffter Woche, eins für alle 24 Türchen
+function abzeichen(kal, jahr) {
+  const liste = kal.bloecke.map((b, i) => { let ok = true; for (let t = b.von; t <= b.bis; t++) if (!istDone(jahr, t)) ok = false; return { n: `Woche ${i + 1}`, l: b.kurz, ok }; });
+  liste.push({ n: '24 von 24', l: 'Alle', ok: kal.tueren.every((t) => istDone(jahr, t.tag)) });
+  return liste;
+}
+function abzeichenHTML(kal, jahr) {
+  return `<div class="abzeichen" role="list" aria-label="Abzeichen">${abzeichen(kal, jahr).map((a, i) => `<div class="abz${a.ok ? ' ok' : ''}" role="listitem" aria-label="Abzeichen ${esc(a.n)}${a.ok ? ', erreicht' : ', noch offen'}"><span class="abz-rund">${a.ok ? svg(P.haken, 18) : i < 4 ? i + 1 : '24'}</span><span class="klein">${esc(a.l)}</span></div>`).join('')}</div>`;
+}
 function adventSerie(jahr, heute) {
   let n = 0, t = istDone(jahr, heute) ? heute : heute - 1;
   while (t >= 1 && istDone(jahr, t)) { n++; t--; }
@@ -340,9 +370,10 @@ function vAdvent(st) {
   }).join('');
   const teilen = z.modus !== 'aktiv' || istDone(jahr, 24);
   return `<div class="seite">
-    <div class="advent-kopf"><div><p class="eyebrow">${kopf}</p><h1>Advent ${jahr}</h1><p class="muted">${fertig} von 24 geschafft${serie ? ` · Serie: ${serie} ${serie === 1 ? 'Tag' : 'Tage'}` : ''}</p></div>
+    <div class="advent-kopf"><div><p class="eyebrow">${kopf}</p><h1>Advent ${jahr}</h1><p class="muted">${fertig} von 24 geschafft${serie ? ` · Serie: ${serie} ${serie === 1 ? 'Tag' : 'Tage'}` : ''}</p>${kerzenHTML(kerzenAn(z))}</div>
       ${kbImg({ intens: fortschrittIntens(kal, jahr), w: 84, h: 156, yaw: -0.5 }, 'Fortschritt: Jede abgeschlossene Woche färbt ihre Körperregion ein.', 'advent-koerper')}</div>
     <div class="bloecke">${bloecke}</div>
+    ${abzeichenHTML(kal, jahr)}
     <div class="tueren">${kal.tueren.map((t) => tuerKachel(z, t)).join('')}</div>
     <div class="aktionen">${z.modus === 'aktiv' ? `<button class="btn-sek" data-a="ics" data-v="${jahr}">${svg(P.kalender, 18)}<span>Tägliche Erinnerung (Kalender)</span></button>` : ''}
       ${teilen ? `<button class="btn-sek" data-a="teilen" data-v="${jahr}">${svg(P.teilen, 18)}<span>Ergebnis als Bild teilen</span></button>` : ''}</div>
@@ -441,6 +472,9 @@ function vIch(st) {
       <div class="seg" role="group" aria-label="Erscheinungsbild">${[['auto', 'Automatisch'], ['hell', 'Hell'], ['dunkel', 'Dunkel']].map(([v, l]) => `<button data-a="thema" data-v="${v}" aria-pressed="${thema === v}">${l}</button>`).join('')}</div>
       <button class="schalter" role="switch" aria-checked="${d.einst.ton}" data-a="ton"><span>Ton und Vibration im Ablauf</span><i aria-hidden="true"></i></button>
     </div>
+    <div class="karte" id="geraete"><h2>Meine Geräte</h2><p class="klein muted">Tipp an, was du zur Hand hast. Übungen, für die etwas fehlt, werden ausgeblendet. Übungen ohne Geräte gehen immer.</p>
+      <div class="chips" role="group" aria-label="Meine Geräte">${GERAETE.map((g) => { const da = !fehlendeGeraete()[g.id]; return `<button class="chip${da ? ' voll' : ''}" data-a="geraet" data-v="${g.id}" aria-pressed="${da}">${esc(g.n)}</button>`; }).join('')}</div>
+      <p class="klein muted">${Object.keys(U).filter(moeglich).length} von ${Object.keys(U).length} Übungen passen zu deiner Auswahl.</p></div>
     <div class="karte"><h2>Deine Daten</h2><p class="klein muted">Alles bleibt auf diesem Gerät. Mit einer Datei ziehst du auf ein anderes Gerät um.</p>
       <div class="aktionen"><button class="btn-sek" data-a="export">${svg(P.download, 18)}<span>Exportieren</span></button><button class="btn-sek" data-a="import">${svg(P.upload, 18)}<span>Importieren</span></button></div>
       <input type="file" id="import-datei" accept="application/json,.json" hidden></div>
@@ -671,12 +705,18 @@ const A = {
   'start-thema': (v) => laufStart(queueListe(THEMEN[Number(v)].ids), { typ: 'thema' }),
   'start-eigene': (v) => { const r = store.d.routinen.find((x) => x.id === v); const q = r ? queueListe(r.ids) : []; if (q.length) laufStart(q, { typ: 'eigene' }); },
   'start-tuer': (v) => { const [j, t] = v.split('/').map(Number); const tuer = KALENDER[j].tueren[t - 1]; laufStart(tuer.ablauf.map((it) => Object.assign({}, it, { key: it.key ? wk(j, it.key) : undefined })), { typ: 'tuer', jahr: j, tag: t }); },
-  abhaken: (v) => { const [j, t] = v.split('/'); store.set((d) => { const k = wk(j, t); d.done[k] = !d.done[k]; if (!d.done[k]) delete d.done[k]; }); render(); },
+  abhaken: (v) => {
+    const [j, t] = v.split('/'), kal = KALENDER[Number(j)], vorher = kal ? abzeichen(kal, Number(j)).filter((a) => a.ok).length : 0;
+    store.set((d) => { const k = wk(j, t); d.done[k] = !d.done[k]; if (!d.done[k]) delete d.done[k]; });
+    render();
+    if (kal) { const neu = abzeichen(kal, Number(j)).filter((a) => a.ok); if (neu.length > vorher) toast(neu.length === 5 ? 'Abzeichen: alle 24 Türchen geschafft. Frohe Weihnachten!' : `Abzeichen verdient: ${neu[neu.length - 1].n} geschafft!`); }
+  },
   'lauf-weiter': () => laufWeiter(),
   'lauf-pause': () => { S.pause = !S.pause; render(); },
   'lauf-ende': () => { laufStopp(); zurueck(); },
   thema: (v) => { store.set((d) => { d.einst.thema = v; }); wendeThemaAn(); render(); },
   ton: () => { store.set((d) => { d.einst.ton = !d.einst.ton; }); render(); },
+  geraet: (v) => { store.set((d) => { d.einst.fehlt = d.einst.fehlt || {}; if (d.einst.fehlt[v]) delete d.einst.fehlt[v]; else d.einst.fehlt[v] = true; }); render(); aktualisiereKoerper(); },
   export: () => { speichereDatei(new Blob([store.exportText()], { type: 'application/json' }), `muskelkarte-daten-${isoTag()}.json`); toast('Datei gespeichert.'); },
   import: () => { const el = $('#import-datei'); if (el) el.click(); },
   ics: (v) => ics(Number(v)),

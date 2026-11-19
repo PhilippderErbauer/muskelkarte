@@ -262,6 +262,6 @@ Pro Welle schreibe ich Texte (Schritte, typische Fehler, leichter/schwerer, Dosi
 ## 6. Offene Fragen an dich
 
 1. **Geräte:** Sind Widerstandsband, Kurzhanteln und Faszienrolle okay? Oder soll die App bei „Haushalt“ bleiben (Handtuch, Stuhl, Wasserflaschen, Tennisball)?
-2. **Ein Filter „Meine Geräte“** unter *Ich* (stand schon im Konzept 4.7) wird mit mehr Geräten wichtiger. Soll der mit in Welle 1?
+2. ✅ **Filter „Meine Geräte“** unter *Ich* ist eingebaut (19.11.).
 3. **Profi-Übungen (Level 3):** Es sind nur wenige (Hollow Hold, Bulgarische Kniebeuge). Mehr davon oder lieber einsteigerfreundlich bleiben?
 4. **Neue Muskelgruppen:** Das Modell kennt auch Rotatorenmanschette, Zwerchfell und Beckenboden. Sollen die als eigene Gruppen dazukommen (z. B. für Atem- und Beckenbodenübungen)?

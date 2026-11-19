@@ -643,6 +643,16 @@ export const UEBUNGEN = {
 
 export const LEVEL = ['', 'Einsteiger', 'Fortgeschritten', 'Profi'];
 
+// Geräte für den Filter „Meine Geräte“. Die Angabe eq einer Übung wird an „, “ getrennt und hierüber zugeordnet.
+export const GERAETE = [
+  { id: 'matte', n: 'Matte' }, { id: 'wand', n: 'Freie Wand' }, { id: 'stuhl', n: 'Stuhl' }, { id: 'tuer', n: 'Türrahmen' },
+  { id: 'tisch', n: 'Stabiler Tisch' }, { id: 'stufe', n: 'Stufe oder Treppe' }, { id: 'handtuch', n: 'Handtuch' }, { id: 'kissen', n: 'Kissen' },
+  { id: 'stab', n: 'Besenstiel' }, { id: 'ball', n: 'Tennisball' }, { id: 'hanteln', n: 'Kurzhanteln oder Wasserflaschen' },
+  { id: 'band', n: 'Widerstandsband' }, { id: 'rolle', n: 'Faszienrolle' }
+];
+const EQ_ID = { 'Matte': 'matte', 'Wand': 'wand', 'Stuhl': 'stuhl', 'Türrahmen': 'tuer', 'Tisch': 'tisch', 'Stabiler Tisch': 'tisch', 'Stufe': 'stufe', 'Handtuch': 'handtuch', 'Kissen': 'kissen', 'Besenstiel': 'stab', 'Tennisball': 'ball', 'Kurzhanteln': 'hanteln', 'Widerstandsband': 'band', 'Faszienrolle': 'rolle' };
+export const geraeteVon = (u) => (u.eq === 'Ohne Geräte' ? [] : u.eq.split(', ').map((n) => EQ_ID[n]));
+
 export const THEMEN = [
   { n: 'Nacken nach dem Bürotag', ids: ['nacken-loesen', 'schulterkreisen', 'brustdehnung', 'wand-engel'] },
   { n: 'Vor dem Laufen', ids: ['kniebeuge', 'wadenheben', 'einbeinstand', 'katze-kuh'] },

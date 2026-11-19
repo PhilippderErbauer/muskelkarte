@@ -11,8 +11,8 @@ Die ganze Idee steht in [KONZEPT.md](KONZEPT.md).
 - **Ablauf-Modus** mit Timer, Stoppuhr, Sätzen, Pausen, Ton/Vibration; der Bildschirm bleibt an
 - **Entdecken:** Suche, Filter, 9 Themen („Nacken nach dem Bürotag“, „Starke Beine ohne Geräte“ …), Liste nach Region
 - **Training:** 4 fertige Routinen und eigene Routinen (anlegen, sortieren, umbenennen)
-- **Ich:** Serie, Wochenübersicht, Körper-Rückblick des Monats, Startwerte, Favoriten, Verlauf, Archiv, Export/Import
-- **Adventskalender 2026:** 24 Türchen in 4 Wochenblöcken, Test-Tage mit Stoppuhr, Re-Test an Tag 24, Fortschritt am Körper, Erinnerungen als Kalenderdatei, Ergebnis als Bild teilen
+- **Ich:** Serie, Wochenübersicht, Körper-Rückblick des Monats, Startwerte, Favoriten, Verlauf, Archiv, **Meine Geräte** (Übungen mit fehlenden Geräten werden ausgeblendet), Export/Import
+- **Adventskalender 2026:** 24 Türchen in 4 Wochenblöcken, Adventskerzen an den Sonntagen, Abzeichen je Woche und für alle 24, Test-Tage mit Stoppuhr, Re-Test an Tag 24, Fortschritt am Körper, Erinnerungen als Kalenderdatei, Ergebnis als Bild teilen
 - **Design C „Kobalt“** in Hell und Dunkel, „Automatisch“ folgt dem Gerät
 - **3D-Körper im Look „Linien“:** Höhenlinien wie bei einem 3D-Scan, Muskelgruppen als kräftigere Linien
 - **PWA:** installierbar, offline nutzbar, keine Konten, kein Tracking, keine fremden Server
