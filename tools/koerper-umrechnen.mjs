@@ -13,6 +13,7 @@
 // Die Zuordnung der Modellteile zu den Muskelgruppen steht in GRUPPEN (weiter unten).
 
 import { writeFileSync } from 'node:fs';
+import { gzipSync } from 'node:zlib';
 import { NodeIO } from '@gltf-transform/core';
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions';
 import { MeshoptDecoder } from 'meshoptimizer';
@@ -171,20 +172,67 @@ for (let i = 0; i < haut.T.length; i += 3) {
 const neuNr = new Int32Array(P.length / 3).fill(-1), P2 = [], T = [];
 for (const i of T0) { if (neuNr[i] < 0) { neuNr[i] = P2.length / 3; P2.push(P[3 * i], P[3 * i + 1], P[3 * i + 2]); } T.push(neuNr[i]); }
 P.length = 0; for (const v of P2) P.push(v);
-const n = P.length / 3;
-const N = new Float32Array(n * 3);
-for (let i = 0; i < T.length; i += 3) {
-  const a = T[i] * 3, b = T[i + 1] * 3, c = T[i + 2] * 3;
-  const ux = P[b] - P[a], uy = P[b + 1] - P[a + 1], uz = P[b + 2] - P[a + 2];
-  const vx = P[c] - P[a], vy = P[c + 1] - P[a + 1], vz = P[c + 2] - P[a + 2];
-  const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx; // flächengewichtet
-  for (const o of [a, b, c]) { N[o] += nx; N[o + 1] += ny; N[o + 2] += nz; }
+let n = P.length / 3;
+const N = [];
+{
+  const Nf = new Float64Array(n * 3);
+  for (let i = 0; i < T.length; i += 3) {
+    const a = T[i] * 3, b = T[i + 1] * 3, c = T[i + 2] * 3;
+    const ux = P[b] - P[a], uy = P[b + 1] - P[a + 1], uz = P[b + 2] - P[a + 2];
+    const vx = P[c] - P[a], vy = P[c + 1] - P[a + 1], vz = P[c + 2] - P[a + 2];
+    const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx; // flächengewichtet
+    for (const o of [a, b, c]) { Nf[o] += nx; Nf[o + 1] += ny; Nf[o + 2] += nz; }
+  }
+  for (let i = 0; i < n; i++) { const l = Math.hypot(Nf[3 * i], Nf[3 * i + 1], Nf[3 * i + 2]) || 1; N.push(Nf[3 * i] / l, Nf[3 * i + 1] / l, Nf[3 * i + 2] / l); }
 }
-for (let i = 0; i < n; i++) { const l = Math.hypot(N[3 * i], N[3 * i + 1], N[3 * i + 2]) || 1; N[3 * i] /= l; N[3 * i + 1] /= l; N[3 * i + 2] /= l; }
 // Außen? Die Normalen sollen nach außen zeigen (Brust: z > 0)
-let aussen = 0;
-for (let i = 0; i < n; i++) aussen += P[3 * i] * N[3 * i] + P[3 * i + 2] * N[3 * i + 2];
-if (aussen < 0) { for (let i = 0; i < N.length; i++) N[i] = -N[i]; for (let i = 0; i < T.length; i += 3) { const t = T[i + 1]; T[i + 1] = T[i + 2]; T[i + 2] = t; } }
+{
+  let aussen = 0;
+  for (let i = 0; i < n; i++) aussen += P[3 * i] * N[3 * i] + P[3 * i + 2] * N[3 * i + 2];
+  if (aussen < 0) { for (let i = 0; i < N.length; i++) N[i] = -N[i]; for (let i = 0; i < T.length; i += 3) { const t = T[i + 1]; T[i + 1] = T[i + 2]; T[i + 2] = t; } }
+}
+// Große Dreiecke teilen (längste Kante halbieren, bis keine Kante länger als LMAX ist). Innerhalb eines
+// Dreiecks verläuft eine Flächengrenze gerade; mit kleinen, gleichmäßigen Dreiecken wird sie rund.
+const LMAX = 0.013;
+// Kopf, Hände und Füße bleiben neutral und müssen nicht verfeinert werden
+const ohneFlaeche = (i) => { const x = P[3 * i], y = P[3 * i + 1]; return y > 1.61 || y < 0.085 || (y < 0.95 && Math.abs(x) > 0.2); };
+{
+  const kante = new Map(); // "a,b" (a<b) → Liste der Dreiecke
+  const key = (a, b) => (a < b ? a * 1048576 + b : b * 1048576 + a);
+  const len = (a, b) => Math.hypot(P[3 * a] - P[3 * b], P[3 * a + 1] - P[3 * b + 1], P[3 * a + 2] - P[3 * b + 2]);
+  const add = (t) => { for (let e = 0; e < 3; e++) { const k = key(T[3 * t + e], T[3 * t + (e + 1) % 3]); let l = kante.get(k); if (!l) kante.set(k, (l = [])); l.push(t); } };
+  const del = (t) => { for (let e = 0; e < 3; e++) { const k = key(T[3 * t + e], T[3 * t + (e + 1) % 3]); const l = kante.get(k); if (l) { const i = l.indexOf(t); if (i >= 0) l.splice(i, 1); if (!l.length) kante.delete(k); } } };
+  for (let t = 0; t < T.length / 3; t++) add(t);
+  let geteilt = 0;
+  for (let runde = 0; runde < 12; runde++) {
+    const lang = [];
+    for (const [k, l] of kante) { const a = Math.floor(k / 1048576), b = k % 1048576; const L = len(a, b); if (L > LMAX && !(ohneFlaeche(a) && ohneFlaeche(b))) lang.push([L, a, b]); }
+    if (!lang.length) break;
+    lang.sort((x, y) => y[0] - x[0]);
+    for (const [, a, b] of lang) {
+      const tris = kante.get(key(a, b));
+      if (!tris || !tris.length) continue;
+      const m = P.length / 3;
+      P.push((P[3 * a] + P[3 * b]) / 2, (P[3 * a + 1] + P[3 * b + 1]) / 2, (P[3 * a + 2] + P[3 * b + 2]) / 2);
+      let nx = N[3 * a] + N[3 * b], ny = N[3 * a + 1] + N[3 * b + 1], nz = N[3 * a + 2] + N[3 * b + 2]; const nl = Math.hypot(nx, ny, nz) || 1;
+      N.push(nx / nl, ny / nl, nz / nl);
+      for (const t of [...tris]) {
+        const v = [T[3 * t], T[3 * t + 1], T[3 * t + 2]];
+        const ia = v.indexOf(a), ib = v.indexOf(b), ic = 3 - ia - ib, c = v[ic];
+        del(t);
+        // Reihenfolge (Umlauf) beibehalten: a→b wird a→m und m→b
+        const vor = (ib === (ia + 1) % 3);
+        const t1 = vor ? [a, m, c] : [m, a, c], t2 = vor ? [m, b, c] : [b, m, c];
+        T[3 * t] = t1[0]; T[3 * t + 1] = t1[1]; T[3 * t + 2] = t1[2];
+        const t2i = T.length / 3; T.push(t2[0], t2[1], t2[2]);
+        add(t); add(t2i);
+      }
+      geteilt++;
+    }
+  }
+  n = P.length / 3;
+  console.log(`Verfeinert: ${geteilt} Kanten geteilt → ${n} Punkte, ${T.length / 3} Dreiecke`);
+}
 
 // ---------- Abstände: Raster mit allen Stichpunkten ----------
 const Z = 0.015, R = Math.ceil(DMAX / Z);
@@ -234,7 +282,7 @@ function glaette(F, mal) {
   }
 }
 // 1. Rohabstände beruhigen, dann bekommt jeder Hautpunkt die nächste Gruppe; liegt kein Muskel nah genug darunter: neutral.
-glaette(D, 6);
+glaette(D, 12);
 const lab = new Uint8Array(n);
 for (let v = 0; v < n; v++) {
   let g1 = 0, d1 = 1e9;
@@ -257,14 +305,14 @@ for (let it = 0; it < 6; it++) {
   }
   lab.set(neu);
 }
-// 3. Kleine Inseln (unter 25 Punkten) der umgebenden Gruppe zuschlagen
+// 3. Kleine Inseln (unter 80 Punkten) der umgebenden Gruppe zuschlagen
 {
   const komp = new Int32Array(n).fill(-1);
   for (let s = 0; s < n; s++) {
     if (komp[s] >= 0) continue;
     const liste = [s]; komp[s] = s;
     for (let q = 0; q < liste.length; q++) for (const u of nb[liste[q]].keys()) if (komp[u] < 0 && lab[u] === lab[s]) { komp[u] = s; liste.push(u); }
-    if (liste.length < 25) {
+    if (liste.length < 80) {
       const z = new Map();
       for (const v of liste) for (const u of nb[v].keys()) if (lab[u] !== lab[s]) z.set(lab[u], (z.get(lab[u]) || 0) + 1);
       let bg = lab[s], bz = 0;
@@ -273,25 +321,32 @@ for (let it = 0; it < 6; it++) {
     }
   }
 }
-// 4. Je Gruppe ein vorzeichenbehafteter Abstand auf der Haut zur Grenze (innen negativ), per Dijkstra
-const SD = new Float32Array(n * NG);
-for (let g = 0; g < NG; g++) {
-  const dist = new Float32Array(n).fill(DMAX), fertig = new Uint8Array(n), heap = [];
-  const push = (v, d) => { heap.push([d, v]); let i = heap.length - 1; while (i > 0) { const p = (i - 1) >> 1; if (heap[p][0] <= heap[i][0]) break; [heap[p], heap[i]] = [heap[i], heap[p]]; i = p; } };
-  const pop = () => { const top = heap[0], last = heap.pop(); if (heap.length) { heap[0] = last; let i = 0; for (;;) { const l = 2 * i + 1, r = l + 1; let m = i; if (l < heap.length && heap[l][0] < heap[m][0]) m = l; if (r < heap.length && heap[r][0] < heap[m][0]) m = r; if (m === i) break; [heap[m], heap[i]] = [heap[i], heap[m]]; i = m; } } return top; };
-  for (let v = 0; v < n; v++) for (const [u, l] of nb[v]) if ((lab[u] === g) !== (lab[v] === g) && l / 2 < dist[v]) { dist[v] = l / 2; }
-  for (let v = 0; v < n; v++) if (dist[v] < DMAX) push(v, dist[v]);
-  while (heap.length) {
-    const [d, v] = pop();
-    if (fertig[v] || d > dist[v]) continue;
-    fertig[v] = 1;
-    for (const [u, l] of nb[v]) if (d + l < dist[u]) { dist[u] = d + l; push(u, dist[u]); }
-  }
-  for (let v = 0; v < n; v++) SD[v * NG + g] = lab[v] === g ? -dist[v] : dist[v];
+// 4. Weiche Zugehörigkeit je Gruppe: 1 innerhalb, 0 außerhalb, dann weichgezeichnet. Die Grenze liegt
+//    dort, wo zwei Gruppen gleich stark sind; dadurch verläuft sie rund statt entlang der Dreieckskanten.
+const W = new Float32Array(n * NG);
+for (let v = 0; v < n; v++) W[v * NG + lab[v]] = 1;
+glaette(W, 40);
+// 5. In Meter umrechnen: Wert je Gruppe = -Zugehörigkeit / Steigung, damit die Differenz der beiden
+//    stärksten Gruppen etwa dem doppelten Abstand zur Grenze entspricht (gleichmäßige Fugen).
+const ST = new Float32Array(n);
+for (let v = 0; v < n; v++) {
+  let a = 0, b = 0, wa = -1, wb = -1;
+  for (let g = 0; g < NG; g++) { const w = W[v * NG + g]; if (w > wa) { wb = wa; b = a; wa = w; a = g; } else if (w > wb) { wb = w; b = g; } }
+  let sum = 0, k = 0;
+  const f0 = W[v * NG + a] - W[v * NG + b];
+  for (const [u, l] of nb[v]) { sum += Math.abs((W[u * NG + a] - W[u * NG + b]) - f0) / l; k++; }
+  ST[v] = Math.max(k ? sum / k / 0.64 : 0, 2 / DMAX);
 }
-// 5. Weichzeichnen, damit die Grenzen rund statt treppig verlaufen
-glaette(SD, 16);
+// Die Steigung selbst glätten, sonst werden die Ränder der Fugen unruhig
+for (let it = 0; it < 8; it++) {
+  const neu = ST.slice();
+  for (let v = 0; v < n; v++) { let s = ST[v], w = 1; for (const u of nb[v].keys()) { s += ST[u]; w++; } neu[v] = s / w; }
+  ST.set(neu);
+}
+const SD = new Float32Array(n * NG);
+for (let v = 0; v < n; v++) for (let g = 0; g < NG; g++) SD[v * NG + g] = -2 * W[v * NG + g] / ST[v];
 
-const buf = schreibeKoerper({ P: new Float32Array(P), N, D: SD, T: new Uint32Array(T), n });
+const roh = schreibeKoerper({ P: new Float32Array(P), N: new Float32Array(N), D: SD, T: new Uint32Array(T), n });
+const buf = gzipSync(roh, { level: 9 });
 writeFileSync(ziel, buf);
-console.log(`Geschrieben: ${ziel} (${(buf.byteLength / 1024).toFixed(0)} KB, ${n} Punkte, ${T.length / 3} Dreiecke)`);
+console.log(`Geschrieben: ${ziel} (${(buf.byteLength / 1024).toFixed(0)} KB gepackt, ${(roh.byteLength / 1024).toFixed(0)} KB entpackt, ${n} Punkte, ${T.length / 3} Dreiecke)`);

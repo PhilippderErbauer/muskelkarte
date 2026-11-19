@@ -36,7 +36,9 @@ let FIGUR = null;
 try {
   const r = await fetch(new URL('./data/koerper.bin', import.meta.url));
   if (!r.ok) throw new Error('HTTP ' + r.status);
-  FIGUR = ladeKoerper(new Uint8Array(await r.arrayBuffer()));
+  if (typeof DecompressionStream === 'undefined') throw new Error('Browser kann nicht entpacken');
+  const roh = await new Response(r.body.pipeThrough(new DecompressionStream('gzip'))).arrayBuffer();
+  FIGUR = ladeKoerper(new Uint8Array(roh));
 } catch (e) { console.warn('Körpermodell nicht geladen, nutze den erzeugten Körper:', e); }
 export const netz = () => FIGUR || (FIGUR = bauFigur());
 export const netzFertig = () => !!FIGUR;

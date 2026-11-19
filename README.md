@@ -65,7 +65,7 @@ src/
   three/figurstil.js     Darstellung: Linien (aktiv), dazu Skulptur und Illustration
   three/puppe.js         Gliederpuppe aus Schlüsselposen
   three/render.js        Zeichnen mit WebGL, Ersatz ohne WebGL
-  data/koerper.bin       Haut des Anatomie-Modells mit Abständen zu den 17 Muskelgruppen (≈ 400 KB)
+  data/koerper.bin       Haut des Anatomie-Modells mit Zugehörigkeit zu den 17 Muskelgruppen (gzip, ≈ 1 MB)
   data/muskeln.js        Muskelgruppen
   data/uebungen.js       Übungen, Themen, Routinen
   data/advent-2026.js    Die 24 Türchen
