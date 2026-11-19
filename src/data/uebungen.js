@@ -62,6 +62,92 @@ const kindB = [141, 140, 126, 130.5, 105, 124.5, 84, 124, 108, 146, 74, 146, 62,
 const beuge = [146, 134, 140, 119, 128, 102, 114, 86, 118, 118, 118, 150, 132, 150, 141, 138, 143, 150];
 const wand = (x) => ['box', x, -8, -36, x + 3.5, 150, 36];
 
+// --- Posen aus Winkeln und Zielpunkten ---
+// Winkel in Grad wie auf dem Papier: 0 = nach vorn (Blickrichtung), 90 = nach oben, -90 = nach unten.
+// Ein Ziel { ziel: [x, y] } setzt Hand oder Fuß genau auf diesen Punkt (Ellbogen bzw. Knie werden berechnet,
+// knick = 1 beugt nach vorn, -1 nach hinten). So bleiben alle Glieder gleich lang.
+const LG = { hals: 16, ro: 20, ru: 22, os: 32, us: 32, fu: 14, oa: 24, ua: 22 };
+const GRAD = Math.PI / 180;
+const weiter = (p, w, l) => [p[0] + Math.cos(w * GRAD) * l, p[1] - Math.sin(w * GRAD) * l];
+const richtung = (a, b) => Math.atan2(a[1] - b[1], b[0] - a[0]) / GRAD;
+function zweiGlieder(a, ziel, l1, l2, knick) {
+  const d = Math.max(1e-3, Math.min(Math.hypot(ziel[0] - a[0], ziel[1] - a[1]), l1 + l2 - 0.01)), w = richtung(a, ziel);
+  const off = Math.acos(Math.max(-1, Math.min(1, (l1 * l1 + d * d - l2 * l2) / (2 * l1 * d)))) / GRAD;
+  const g = weiter(a, w + knick * off, l1);
+  return [g, weiter(g, richtung(g, ziel), l2)];
+}
+// o: h Hüfte [x, y]; r Rumpfwinkel (Hüfte → Schulter); rk Krümmung (positiv = Rücken rund); k Kopfwinkel;
+//    b1, b2 Beine: [Oberschenkel, Unterschenkel, Fuß] oder { ziel, fuss, knick };
+//    a1, a2 Arme: [Oberarm, Unterarm] oder { ziel, knick }; lt seitlicher Abstand [Ellbogen1, Hand1, Ellbogen2, Hand2]
+function pz(o) {
+  const r = o.r ?? 90, rk = o.rk || 0, h = o.h;
+  const mi = weiter(h, r - rk, LG.ru), sc = weiter(mi, r + rk, LG.ro), ko = weiter(sc, o.k ?? r + rk, LG.hals);
+  const bein = (b) => {
+    if (Array.isArray(b)) { const kn = weiter(h, b[0], LG.os), fu = weiter(kn, b[1], LG.us); return [kn, fu, weiter(fu, b[2] ?? 0, LG.fu)]; }
+    const [kn, fu] = zweiGlieder(h, b.ziel, LG.os, LG.us, b.knick ?? 1);
+    return [kn, fu, weiter(fu, b.fuss ?? 0, LG.fu)];
+  };
+  const armf = (a) => {
+    if (Array.isArray(a)) { const e = weiter(sc, a[0], LG.oa); return [e, weiter(e, a[1], LG.ua)]; }
+    return zweiGlieder(sc, a.ziel, LG.oa, LG.ua, a.knick ?? -1);
+  };
+  const B = [-90, -90, 0], A = [-88, -85];
+  let p = [ko, sc, mi, h, ...bein(o.b1 || B), ...armf(o.a1 || A)];
+  if (o.b2 || o.a2 || o.lt) p.push(...bein(o.b2 || o.b1 || B));
+  if (o.a2 || o.lt) p.push(...armf(o.a2 || o.a1 || A));
+  p = p.flat();
+  if (o.lt) p.push(...o.lt);
+  return p.map((v) => Math.round(v * 10) / 10);
+}
+const stuhl = (x, sitz = 116) => [['box', x, sitz, -22, x + 30, sitz + 4, 22], ['box', x + 1, sitz + 4, -21, x + 4, 150, -18], ['box', x + 1, sitz + 4, 18, x + 4, 150, 21], ['box', x + 26, sitz + 4, -21, x + 29, 150, -18], ['box', x + 26, sitz + 4, 18, x + 29, 150, 21]];
+
+// Punkte einer fertigen Pose gezielt versetzen: mit(p, { 2: [x, y] })
+const mit = (p, o) => { const q = p.slice(); for (const j in o) { q[2 * j] = o[j][0]; q[2 * j + 1] = o[j][1]; } return q; };
+const ARME_LIEGEN = [-14, -3];
+const rueckenlage = (o = {}) => pz(Object.assign({ h: [110, 142], r: 180, b1: { ziel: [150, 150] }, a1: ARME_LIEGEN }, o));
+const sitzen = (o = {}) => pz(Object.assign({ h: [100, 118], b1: [0, -90, 0], a1: [-75, -37] }, o));
+const liegeBasis = rueckenlage();
+// Welle 1
+const kinnA = rueckenlage(), kinnB = rueckenlage({ k: 172 });
+const kopfN = sitzen(), kopfV = sitzen({ k: 76 }), kopfZ = sitzen({ k: 97 });
+const ballA = pz({ h: [100, 86], r: 92, b1: { ziel: [124, 150] } }), ballB = pz({ h: [100, 93], r: 92, b1: { ziel: [124, 150] } });
+const pendel = (w) => pz({ h: [112, 88], r: 15, k: 0, b1: { ziel: [126, 150] }, b2: { ziel: [94, 150] }, a1: [w, w], a2: { ziel: [166, 112] }, lt: [19, 19, 19, 19] });
+const rolleArme = (p) => mit(p, { 7: [p[2] + 1, 145], 8: [p[2] + 2, 147], 12: [p[2] + 1, 145], 13: [p[2] + 2, 147] });
+const rolleA = rolleArme(pz({ h: [110, 126], r: 180, b1: { ziel: [150, 150] }, a1: ARME_LIEGEN, lt: [32, 52, 32, 52] }));
+const rolleB = mit(rolleA, { 1: [rolleA[2], rolleA[3] - 2], 2: [rolleA[4], rolleA[5] - 4] });
+const curlA = pz({ h: [120, 86], a1: [-91, -86], lt: [19, 19, 19, 19] }), curlB = pz({ h: [120, 86], a1: [-94, 72], lt: [19, 19, 19, 19] });
+const trizA = pz({ h: [120, 86], a1: [100, -95], a2: { ziel: [118, 19], knick: 1 }, lt: [12, 5, 24, 10] });
+const trizB = pz({ h: [120, 86], a1: [107, -92], a2: { ziel: [114, 18], knick: 1 }, lt: [12, 5, 24, 10] });
+const wristA = sitzen({ r: 50, k: 40, a1: [-100, -14], lt: [19, 19, 19, 19] }), wristB = sitzen({ r: 50, k: 40, a1: [-100, 16], lt: [19, 19, 19, 19] });
+const uaA = pz({ h: [120, 86], a1: [0, 0], a2: { ziel: [164, 47] }, lt: [19, 14, 19, 12] }), uaB = pz({ h: [120, 86], a1: [0, 2], a2: { ziel: [160, 49] }, lt: [19, 14, 19, 12] });
+const uarA = sitzen({ r: 84, a1: [-42.4, 0] }), uarB = sitzen({ r: 68, a1: [-33.7, 0] });
+const kobraA = pz({ h: [124, 145], r: 3, k: 3, b1: [180, 180, 195], a1: { ziel: [150, 148] } });
+const kobraB = pz({ h: [124, 145], r: 28, rk: -8, k: 45, b1: [180, 180, 195], a1: { ziel: [150, 148] } });
+const kippA = mit(liegeBasis, { 2: [liegeBasis[4], liegeBasis[5] + 1.5] }), kippB = mit(liegeBasis, { 2: [liegeBasis[4], liegeBasis[5] - 4] });
+const ruderA = pz({ h: [112, 88], r: 95, b1: { ziel: [122, 150] }, a1: { ziel: [151, 62] }, lt: [19, 17, 19, 17] });
+const ruderB = pz({ h: [112, 88], r: 97, b1: { ziel: [122, 150] }, a1: { ziel: [116, 67] }, lt: [22, 17, 22, 17] });
+const rundA = pz({ h: [120, 86], a1: [-2, -2], lt: [19, 4, 19, 4] }), rundB = pz({ h: [116, 86], rk: -14, k: 50, a1: [-6, -6], lt: [19, 4, 19, 4] });
+const obrRolle = (x) => pz({ h: [x, 118], r: 188, k: 168, b1: { ziel: [150, 150] }, a1: [60, 225], lt: [8, -12, 8, -12] });
+const stufeA = pz({ h: [108, 142], r: 180, b1: [90, 0, 70], a1: ARME_LIEGEN }), stufeB = mit(stufeA, { 2: [stufeA[4], stufeA[5] - 3] });
+const gesBall = (dx, dy) => pz({ h: [110 + dx, 133 + dy], r: 135, b1: { ziel: [150, 150] }, a1: { ziel: [84, 148] } });
+const marschN = pz({ h: [120, 86], b2: [-90, -90, 0], a1: [-88, -85], a2: [-88, -85] });
+const marschL = pz({ h: [120, 86], b1: [0, -90, 0], b2: [-90, -90, 0], a1: [-112, -100], a2: [-62, -35] });
+const marschR = pz({ h: [120, 86], b1: [-90, -90, 0], b2: [0, -90, 0], a1: [-62, -35], a2: [-112, -100] });
+const schwung = (w) => pz({ h: [120, 86], b1: [w, w, w + 90], b2: [-90, -90, 0], a2: [-60, -30], lt: [19, 19, 30, 44] });
+const quadSt = (h, w) => { const kn = weiter(h, w, LG.os), fu = weiter(kn, 100, LG.us); return pz({ h, b1: [w, 100, 170], b2: { ziel: [120, 150] }, a1: { ziel: [fu[0], fu[1] + 2] }, a2: { ziel: [153, 46] }, lt: [19, 8, 19, 19] }); };
+const quadRolle = (x) => pz({ h: [x, 128], r: 8, k: 12, b1: [186, 186, 250], a1: [-90, 0] });
+const kreuzA = pz({ h: [120, 86], b2: [-100, -100, -10], a1: [-90, -88], lt: [19, 19, 19, 19] });
+const kreuzB = pz({ h: [112, 88], r: 8, k: 6, b1: { ziel: [120, 150] }, b2: [184, 184, -86], a1: [-90, -90], lt: [19, 19, 19, 19] });
+const raupe = [
+  pz({ h: [100, 86] }),
+  pz({ h: [96, 88], r: -50, k: -70, b1: { ziel: [100, 150] }, a1: { ziel: [130, 147] } }),
+  pz({ h: [98, 84], r: -35, k: -45, b1: { ziel: [102, 147], fuss: -40 }, a1: { ziel: [150, 147] } }),
+  pz({ h: [162, 116.8], r: 22.6, k: 22, b1: { ziel: [104, 141], fuss: -100, knick: -1 }, a1: { ziel: [200, 147] } })
+];
+const kissenA = liegeBasis, kissenB = mit(liegeBasis, { 4: [liegeBasis[8], liegeBasis[9] - 0.8] });
+const fersA = pz({ h: [100, 128], r: 95, b1: { ziel: [96, 147], fuss: 180 }, a1: [-70, -20] });
+const fersB = pz({ h: [101, 124], r: 118, k: 108, b1: { ziel: [96, 147], fuss: 180 }, a1: { ziel: [78, 148] } });
+
 export const UEBUNGEN = {
   'wandsitzen': { n: 'Wandsitzen', m: 'kraft', h: ['quad'], nb: ['gesaess'], eq: 'Wand', lv: 1, min: 3, dos: { typ: 'zeit', sek: 30, s: 3 },
     st: ['Rücken flach an die Wand, Füße etwa zwei Fußlängen davor.', 'An der Wand heruntergleiten, bis Knie und Hüfte ungefähr im rechten Winkel sind.', 'Halten und ruhig weiteratmen. Die Knie bleiben über den Fersen.'],
@@ -162,7 +248,108 @@ export const UEBUNGEN = {
   'fussrolle': { n: 'Fußsohle ausrollen', m: 'reco', h: ['waden'], nb: ['schienbein'], eq: 'Tennisball', lv: 1, min: 2, dos: { typ: 'zeit', sek: 60, s: 2 }, seiten: true,
     st: ['Aufrecht stehen und einen Fuß auf den Ball stellen.', 'Mit leichtem Druck langsam von der Ferse bis zum Ballen rollen.', 'Nach einer Minute den Fuß wechseln.'],
     f: ['Der Druck ist angenehm, nicht schmerzhaft.', 'Bei Bedarf an der Wand festhalten.'], le: 'Im Sitzen rollen.', sw: 'An empfindlichen Stellen kurz verweilen.',
-    an: { d: 3, as: 1, p: [['ball', 140, 146, -8, 4]], a: [10, 11], k: [[0, rollA], [0.5, rollB], [1, rollA]] } }
+    an: { d: 3, as: 1, p: [['ball', 140, 146, -8, 4]], a: [10, 11], k: [[0, rollA], [0.5, rollB], [1, rollA]] } },
+  // ---------- Welle 1 (Vorlage: free-exercise-db, gemeinfrei; Texte neu geschrieben) ----------
+  'kinn-einziehen': { n: 'Kinn einziehen im Liegen', m: 'kraft', h: ['nacken'], nb: [], eq: 'Matte', lv: 1, min: 2, dos: { typ: 'wdh', n: 10, s: 2 },
+    st: ['Rückenlage, die Knie aufgestellt, der Hinterkopf liegt auf dem Boden.', 'Das Kinn sanft Richtung Brust ziehen, als würdest du ein Doppelkinn machen. Der Hinterkopf gleitet dabei leicht über den Boden.', '5 Sekunden halten, dann lösen.'],
+    f: ['Den Kopf nicht vom Boden abheben.', 'Nur sanft ziehen, die Kiefermuskeln bleiben locker.'], le: 'Nur 2 Sekunden halten.', sw: 'Im Sitzen ohne Unterlage ausführen.',
+    an: { d: 5, a: [0, 1], k: [[0, kinnA], [0.3, kinnB], [0.8, kinnB], [1, kinnA]] } },
+  'kopf-schieben': { n: 'Kopf vor und zurück schieben', m: 'mobil', h: ['nacken'], nb: ['oruecken'], eq: 'Stuhl', lv: 1, min: 2, dos: { typ: 'wdh', n: 10, s: 2 },
+    st: ['Aufrecht auf einen Stuhl setzen, der Blick geht geradeaus.', 'Den Kopf langsam waagerecht nach vorn schieben, als wolltest du etwas ansehen.', 'Dann den Kopf nach hinten schieben, bis ein Doppelkinn entsteht. Ruhig hin und her bewegen.'],
+    f: ['Den Kopf nicht nicken oder kippen, er gleitet waagerecht.', 'Die Schultern bleiben ruhig.'], le: 'Kleinerer Weg.', sw: 'Hinten jeweils 3 Sekunden halten.',
+    an: { d: 5, p: stuhl(82, 126), a: [0, 1], k: [[0, kopfN], [0.25, kopfV], [0.5, kopfN], [0.75, kopfZ], [1, kopfN]] } },
+  'nacken-ball': { n: 'Nacken mit dem Ball an der Wand lockern', m: 'reco', h: ['nacken'], nb: ['oruecken'], eq: 'Tennisball, Wand', lv: 1, min: 2, dos: { typ: 'zeit', sek: 60, s: 2 },
+    st: ['Mit dem Rücken zur Wand stellen und den Ball zwischen Wand und Nacken klemmen, seitlich neben der Wirbelsäule.', 'Durch leichtes Beugen und Strecken der Knie den Ball langsam über die Nackenmuskeln rollen.', 'An verspannten Stellen kurz verweilen, dann die Seite wechseln.'],
+    f: ['Nicht direkt auf der Wirbelsäule rollen.', 'Der Druck ist angenehm, nicht schmerzhaft.'], le: 'Weniger gegen die Wand lehnen.', sw: 'Den Kopf dabei langsam zur Seite drehen.',
+    an: { d: 4, p: [wand(84), ['ball', 92, 41, 6, 4.5]], a: [0, 1], k: [[0, ballA], [0.5, ballB], [1, ballA]] } },
+  'arm-pendeln': { n: 'Arm pendeln lassen', m: 'reco', h: ['schultern'], nb: [], eq: 'Stuhl', lv: 1, min: 2, dos: { typ: 'zeit', sek: 45, s: 2 }, seiten: true,
+    st: ['Mit einer Hand auf einer Stuhlfläche abstützen und den Oberkörper nach vorn neigen.', 'Den anderen Arm ganz locker hängen lassen.', 'Durch sanftes Wiegen des Körpers den Arm vor und zurück pendeln lassen, dann die Seite wechseln.'],
+    f: ['Den Arm nicht aktiv schwingen, die Bewegung kommt aus dem Körper.', 'Der Rücken bleibt lang.'], le: 'Kleinere Pendelbewegung.', sw: 'Zusätzlich kleine Kreise pendeln.',
+    an: { d: 3, as: 1, p: stuhl(150, 116), a: [1, 7, 8], k: [[0, pendel(-90)], [0.25, pendel(-70)], [0.5, pendel(-90)], [0.75, pendel(-110)], [1, pendel(-90)]] } },
+  'rolle-atmen': { n: 'Auf der Rolle liegen und atmen', m: 'reco', h: ['brust'], nb: ['oruecken'], eq: 'Faszienrolle', lv: 1, min: 3, dos: { typ: 'zeit', sek: 120, s: 1 },
+    st: ['Die Rolle längs auf die Matte legen und sich so darauflegen, dass Kopf und Wirbelsäule darauf ruhen.', 'Die Füße aufstellen und die Arme seitlich mit den Handflächen nach oben ablegen.', 'Ruhig in den Brustkorb atmen und die Schultern zum Boden sinken lassen.'],
+    f: ['Der Kopf liegt auf der Rolle, der Nacken entspannt.', 'Bei Kribbeln in den Händen die Arme tiefer legen.'], le: 'Ein gerolltes Handtuch statt der Rolle nehmen.', sw: 'Die Arme langsam über den Kopf führen und zurück.',
+    an: { d: 8, y: -0.6, p: [['rollex', 50, 116, 142.5, 7.5]], a: [1, 2], k: [[0, rolleA], [0.4, rolleB], [0.6, rolleB], [1, rolleA]] } },
+  'bizeps-curl': { n: 'Bizeps-Curl mit Band oder Flaschen', m: 'kraft', h: ['bizeps'], nb: ['unterarme'], eq: 'Kurzhanteln', lv: 1, min: 3, dos: { typ: 'wdh', n: 12, s: 3 },
+    st: ['Aufrecht stehen, in jeder Hand eine Kurzhantel oder eine gefüllte Wasserflasche, die Handflächen zeigen nach vorn.', 'Die Ellbogen bleiben am Körper. Die Unterarme langsam nach oben beugen.', 'Oben kurz halten, dann langsam wieder absenken.'],
+    f: ['Nicht mit dem Oberkörper Schwung holen.', 'Die Ellbogen wandern nicht nach vorn.'], le: 'Leichtere Flaschen oder ein Band, auf dem du stehst.', sw: '3 Sekunden absenken.',
+    an: { d: 3.5, p: [['hantel', 8], ['hantel', 13]], a: [7, 8], k: [[0, curlA], [0.4, curlB], [0.55, curlB], [1, curlA]] } },
+  'trizeps-dehnung': { n: 'Trizeps-Dehnung über dem Kopf', m: 'dehn', h: ['trizeps'], nb: ['schultern'], eq: 'Ohne Geräte', lv: 1, min: 2, dos: { typ: 'zeit', sek: 30, s: 2 }, seiten: true,
+    st: ['Aufrecht stehen und einen Arm nach oben strecken.', 'Den Ellbogen beugen, sodass die Hand hinter den Nacken sinkt.', 'Mit der anderen Hand den Ellbogen sanft nach hinten drücken und halten, dann die Seite wechseln.'],
+    f: ['Den Kopf nicht nach vorn drücken.', 'Nicht ins Hohlkreuz ausweichen.'], le: 'Ohne Druck der anderen Hand.', sw: 'Den Oberkörper leicht zur Seite neigen.',
+    an: { d: 6, as: 1, y: -1, a: [1, 7, 8], k: [[0, trizA], [0.35, trizB], [0.8, trizB], [1, trizA]] } },
+  'handgelenk-curls': { n: 'Handgelenk-Curls mit Flasche', m: 'kraft', h: ['unterarme'], nb: [], eq: 'Kurzhanteln', lv: 1, min: 3, dos: { typ: 'wdh', n: 15, s: 2 },
+    st: ['Auf einen Stuhl setzen, die Unterarme auf den Oberschenkeln, die Handgelenke ragen über die Knie.', 'In jeder Hand eine Flasche oder Kurzhantel, die Handflächen zeigen nach oben.', 'Die Handgelenke langsam nach oben beugen und wieder absenken. Danach mit den Handflächen nach unten.'],
+    f: ['Nur die Handgelenke bewegen, die Unterarme bleiben liegen.', 'Langsam absenken.'], le: 'Leichtere Flaschen.', sw: 'Oben 2 Sekunden halten.',
+    an: { d: 3, p: stuhl(82, 126).concat([['hantel', 8], ['hantel', 13]]), a: [7, 8], k: [[0, wristA], [0.45, wristB], [0.55, wristB], [1, wristA]] } },
+  'unterarm-dehnen': { n: 'Unterarm dehnen', m: 'dehn', h: ['unterarme'], nb: [], eq: 'Ohne Geräte', lv: 1, min: 2, dos: { typ: 'zeit', sek: 20, s: 2 }, seiten: true,
+    st: ['Einen Arm gestreckt nach vorn heben, die Handfläche zeigt nach vorn, die Finger nach oben.', 'Mit der anderen Hand die Finger sanft zum Körper ziehen und halten.', 'Danach die Hand nach unten abknicken und den Handrücken sanft heranziehen. Dann die Seite wechseln.'],
+    f: ['Nur sanft ziehen.', 'Der Ellbogen bleibt gestreckt, die Schulter unten.'], le: 'Den Ellbogen leicht beugen.', sw: 'Länger halten.',
+    an: { d: 6, as: 1, a: [7, 8], k: [[0, uaA], [0.35, uaB], [0.8, uaB], [1, uaA]] } },
+  'unterarm-ausrollen': { n: 'Unterarm mit dem Ball ausrollen', m: 'reco', h: ['unterarme'], nb: [], eq: 'Tennisball, Tisch', lv: 1, min: 2, dos: { typ: 'zeit', sek: 60, s: 2 }, seiten: true,
+    st: ['An einen Tisch setzen und einen Unterarm mit der Innenseite auf einen Ball legen.', 'Mit leichtem Druck den Unterarm langsam vom Handgelenk bis kurz vor den Ellbogen rollen.', 'Danach die Außenseite des Unterarms rollen, dann die Seite wechseln.'],
+    f: ['Die Ellenbeuge selbst aussparen.', 'Der Druck ist angenehm, nicht schmerzhaft.'], le: 'Weniger Druck.', sw: 'Mit der anderen Hand leicht auf den Unterarm drücken.',
+    an: { d: 4, as: 1, p: stuhl(82, 126).concat([['box', 118, 104, -30, 180, 108, 30], ['box', 120, 108, 26, 123, 150, 29], ['box', 175, 108, 26, 178, 150, 29], ['box', 120, 108, -29, 123, 150, -26], ['box', 175, 108, -29, 178, 150, -26], ['ball', 140, 100, 19, 4]]), a: [7, 8], k: [[0, uarA], [0.5, uarB], [1, uarA]] } },
+  'kobra': { n: 'Kobra', m: 'dehn', h: ['bauch'], nb: ['uruecken'], eq: 'Matte', lv: 1, min: 2, dos: { typ: 'zeit', sek: 20, s: 3 },
+    st: ['Bauchlage, die Hände neben der Brust aufsetzen, die Ellbogen am Körper.', 'Den Oberkörper langsam aufrichten, das Becken bleibt am Boden.', 'Nur so weit hochkommen, wie es im unteren Rücken angenehm ist. Halten und ruhig atmen.'],
+    f: ['Die Schultern nicht zu den Ohren ziehen.', 'Das Becken bleibt liegen.'], le: 'Auf den Unterarmen bleiben (Sphinx).', sw: 'Die Arme fast strecken.',
+    an: { d: 6, a: [1, 2, 3], k: [[0, kobraA], [0.35, kobraB], [0.8, kobraB], [1, kobraA]] } },
+  'becken-kippen': { n: 'Becken kippen in Rückenlage', m: 'mobil', h: ['bauch'], nb: ['uruecken'], eq: 'Matte', lv: 1, min: 2, dos: { typ: 'wdh', n: 12, s: 2 },
+    st: ['Rückenlage, die Knie aufgestellt, die Arme neben dem Körper.', 'Ausatmen und den unteren Rücken sanft auf den Boden drücken, das Becken kippt nach hinten.', 'Einatmen und ein kleines Hohlkreuz machen. Langsam im Atemrhythmus wechseln.'],
+    f: ['Das Gesäß bleibt am Boden.', 'Klein und ruhig bewegen.'], le: 'Nur den Rücken an den Boden drücken.', sw: 'Mit gestreckten Beinen.',
+    an: { d: 5, a: [2, 3], k: [[0, kippA], [0.5, kippB], [1, kippA]] } },
+  'rudern-band': { n: 'Rudern mit dem Band', m: 'kraft', h: ['oruecken'], nb: ['bizeps', 'schultern'], eq: 'Widerstandsband', lv: 1, min: 3, dos: { typ: 'wdh', n: 12, s: 3 },
+    st: ['Das Band in Brusthöhe an einer Türklinke befestigen, beide Enden greifen und einen Schritt zurückgehen.', 'Leicht in die Knie gehen, der Oberkörper ist aufrecht.', 'Die Ellbogen eng am Körper nach hinten ziehen und die Schulterblätter zusammenführen. Langsam zurück.'],
+    f: ['Die Schultern nicht hochziehen.', 'Nicht mit dem Oberkörper nach hinten lehnen.'], le: 'Näher an die Tür stellen.', sw: 'Weiter weg stellen oder ein stärkeres Band.',
+    an: { d: 3.5, y: -0.9, p: [['box', 178, -8, -14, 181, 150, 14], ['band', 178, 72, 0, 8], ['band', 178, 72, 0, 13]], a: [1, 7, 8], k: [[0, ruderA], [0.4, ruderB], [0.55, ruderB], [1, ruderA]] } },
+  'ruecken-rund': { n: 'Rücken rund schieben', m: 'dehn', h: ['oruecken'], nb: ['nacken'], eq: 'Ohne Geräte', lv: 1, min: 2, dos: { typ: 'zeit', sek: 20, s: 3 },
+    st: ['Aufrecht stehen, die Finger vor der Brust verschränken.', 'Die Arme nach vorn strecken, den oberen Rücken rund machen und den Kopf sinken lassen.', 'Die Schulterblätter auseinanderziehen, halten und ruhig in den Rücken atmen.'],
+    f: ['Die Hüfte bleibt über den Füßen.', 'Nicht die Luft anhalten.'], le: 'Im Sitzen ausführen.', sw: 'Die Hände nach links und rechts wandern lassen.',
+    an: { d: 6, a: [1, 2], k: [[0, rundA], [0.35, rundB], [0.8, rundB], [1, rundA]] } },
+  'oberer-ruecken-rollen': { n: 'Oberen Rücken ausrollen', m: 'reco', h: ['oruecken'], nb: [], eq: 'Faszienrolle', lv: 1, min: 2, dos: { typ: 'zeit', sek: 60, s: 2 },
+    st: ['Die Rolle quer unter den oberen Rücken legen, die Füße aufstellen, die Arme vor der Brust kreuzen.', 'Das Becken anheben und dich mit den Beinen langsam vor und zurück schieben.', 'Von den Schulterblättern bis zur Mitte des Rückens rollen. An festen Stellen kurz verweilen.'],
+    f: ['Nicht über den unteren Rücken rollen.', 'Den Kopf mit dem Kinn leicht zur Brust halten.'], le: 'Das Becken am Boden lassen.', sw: 'Leicht zur Seite drehen und eine Seite einzeln rollen.',
+    an: { d: 5, p: [['rolle', 70, 142.5, -30, 30, 7.5]], a: [1, 2], k: [[0, obrRolle(100)], [0.5, obrRolle(111)], [1, obrRolle(100)]] } },
+  'stufenlagerung': { n: 'Stufenlagerung', m: 'reco', h: ['uruecken'], nb: ['hueftbeuger'], eq: 'Stuhl', lv: 1, min: 3, dos: { typ: 'zeit', sek: 180, s: 1 },
+    st: ['Rückenlage vor einem Stuhl.', 'Die Unterschenkel auf die Sitzfläche legen, Hüfte und Knie sind etwa im rechten Winkel.', 'Die Arme locker ablegen, ruhig in den Bauch atmen und den Rücken schwer werden lassen.'],
+    f: ['Die Unterschenkel liegen ganz auf.', 'Kein Kissen unter den Kopf, wenn der Nacken entspannt ist.'], le: 'Nur 1 Minute.', sw: 'Dabei die Box-Atmung üben.',
+    an: { d: 8, p: stuhl(128, 116), a: [2, 3], k: [[0, stufeA], [0.4, stufeB], [0.6, stufeB], [1, stufeA]] } },
+  'gesaess-ball': { n: 'Gesäß mit dem Ball lockern', m: 'reco', h: ['gesaess'], nb: [], eq: 'Tennisball', lv: 1, min: 2, dos: { typ: 'zeit', sek: 60, s: 2 }, seiten: true,
+    st: ['Auf den Boden setzen und einen Ball unter eine Gesäßhälfte legen.', 'Die Hände hinter dem Körper abstützen und das Gewicht auf den Ball verlagern.', 'In kleinen Kreisen langsam über den Muskel rollen. An festen Stellen kurz verweilen, dann die Seite wechseln.'],
+    f: ['Nicht auf dem Steißbein oder dem Sitzknochen rollen.', 'Bei ausstrahlendem Schmerz abbrechen.'], le: 'Auf einer weichen Unterlage.', sw: 'Den Fuß der Seite aufs andere Knie legen.',
+    an: { d: 4, as: 1, p: [['ball', 110, 146, 8, 4]], a: [2, 3], k: [[0, gesBall(0, 0)], [0.25, gesBall(3, -0.5)], [0.5, gesBall(0, -1)], [0.75, gesBall(-3, -0.5)], [1, gesBall(0, 0)]] } },
+  'knieheben': { n: 'Knieheben im Stand', m: 'kraft', h: ['hueftbeuger'], nb: ['bauch'], eq: 'Ohne Geräte', lv: 1, min: 2, dos: { typ: 'wdh', n: 12, s: 2 },
+    st: ['Aufrecht stehen, die Arme locker.', 'Langsam ein Knie bis auf Hüfthöhe heben, der gegenüberliegende Arm schwingt mit.', 'Kurz halten, absetzen und das andere Bein heben, wie langsames Marschieren.'],
+    f: ['Den Oberkörper nicht nach hinten lehnen.', 'Das Standbein bleibt stabil.'], le: 'Das Knie nur halb so hoch heben.', sw: 'Oben 3 Sekunden halten.',
+    an: { d: 4, a: [3, 4], k: [[0, marschN], [0.2, marschL], [0.3, marschL], [0.5, marschN], [0.7, marschR], [0.8, marschR], [1, marschN]] } },
+  'bein-schwingen': { n: 'Bein vor und zurück schwingen', m: 'mobil', h: ['hueftbeuger'], nb: ['hams', 'gesaess'], eq: 'Ohne Geräte', lv: 1, min: 2, dos: { typ: 'wdh', n: 12, s: 2 }, seiten: true,
+    st: ['Seitlich neben eine Wand oder Stuhllehne stellen und mit einer Hand festhalten.', 'Das äußere Bein locker vor und zurück schwingen.', 'Den Schwung langsam größer werden lassen, dann die Seite wechseln.'],
+    f: ['Der Oberkörper bleibt aufrecht.', 'Nicht ins Hohlkreuz schwingen.'], le: 'Kleinere Bewegung.', sw: 'Danach seitlich vor dem Körper schwingen.',
+    an: { d: 2.4, as: 1, a: [3, 4], k: [[0, schwung(-90)], [0.25, schwung(-48)], [0.5, schwung(-90)], [0.75, schwung(-122)], [1, schwung(-90)]] } },
+  'quad-dehnung': { n: 'Oberschenkel-Dehnung im Stehen', m: 'dehn', h: ['quad'], nb: ['hueftbeuger'], eq: 'Wand', lv: 1, min: 2, dos: { typ: 'zeit', sek: 30, s: 2 }, seiten: true,
+    st: ['Mit einer Hand an der Wand abstützen.', 'Ein Knie beugen und den Fuß mit der Hand fassen, die Ferse Richtung Gesäß ziehen.', 'Die Knie bleiben nebeneinander, das Becken leicht nach vorn schieben. Halten, dann die Seite wechseln.'],
+    f: ['Nicht ins Hohlkreuz fallen.', 'Das Knie zeigt nach unten, nicht zur Seite.'], le: 'Ein Handtuch um den Fuß legen und daran ziehen.', sw: 'Das Gesäß fester anspannen.',
+    an: { d: 6, as: 1, y: 2.4, p: [wand(156)], a: [3, 4], k: [[0, quadSt([120, 86], -92)], [0.35, quadSt([122, 86], -101)], [0.8, quadSt([122, 86], -101)], [1, quadSt([120, 86], -92)]] } },
+  'quad-rollen': { n: 'Oberschenkel vorne ausrollen', m: 'reco', h: ['quad'], nb: [], eq: 'Faszienrolle', lv: 1, min: 2, dos: { typ: 'zeit', sek: 60, s: 2 },
+    st: ['Unterarmstütz, die Rolle liegt quer unter den Oberschenkeln.', 'Mit den Armen langsam vor und zurück schieben und von der Hüfte bis kurz über das Knie rollen.', 'An festen Stellen kurz verweilen, ruhig atmen.'],
+    f: ['Bauch und Gesäß leicht anspannen, kein Hohlkreuz.', 'Nicht über die Kniescheibe rollen.'], le: 'Ein Bein am Boden lassen.', sw: 'Ein Bein über das andere legen.',
+    an: { d: 5, p: [['rolle', 100, 142.5, -30, 30, 7.5]], a: [3, 4], k: [[0, quadRolle(108)], [0.5, quadRolle(132)], [1, quadRolle(108)]] } },
+  'kreuzheben-einbeinig': { n: 'Kreuzheben auf einem Bein', m: 'kraft', h: ['hams'], nb: ['gesaess', 'uruecken'], eq: 'Ohne Geräte', lv: 2, min: 3, dos: { typ: 'wdh', n: 8, s: 2 }, seiten: true,
+    st: ['Auf einem Bein stehen, das Knie ist leicht gebeugt.', 'Den Oberkörper mit geradem Rücken nach vorn neigen und das freie Bein gestreckt nach hinten heben.', 'Bis etwa waagerecht gehen, dann langsam aufrichten. Danach die Seite wechseln.'],
+    f: ['Der Rücken bleibt gerade, nicht rund.', 'Das Becken dreht nicht auf.'], le: 'Die Fußspitze des freien Beins am Boden lassen oder an der Wand festhalten.', sw: 'Eine Flasche in die Hände nehmen.',
+    an: { d: 5, as: 1, a: [2, 3, 4], k: [[0, kreuzA], [0.4, kreuzB], [0.55, kreuzB], [1, kreuzA]] } },
+  'raupe': { n: 'Raupe (Inchworm)', m: 'mobil', h: ['hams'], nb: ['schultern', 'bauch'], eq: 'Ohne Geräte', lv: 2, min: 3, dos: { typ: 'wdh', n: 6, s: 2 },
+    st: ['Aufrecht stehen, dann mit möglichst gestreckten Beinen nach vorn beugen und die Hände vor den Füßen aufsetzen.', 'Mit den Händen Schritt für Schritt nach vorn laufen, bis du im hohen Liegestütz bist.', 'Kurz halten, dann mit den Händen zurücklaufen und langsam aufrichten.'],
+    f: ['Die Hüfte im Liegestütz nicht durchhängen lassen.', 'Die Knie dürfen leicht gebeugt sein.'], le: 'Die Knie stärker beugen.', sw: 'Im Liegestütz einen Liegestütz einbauen.',
+    an: { d: 9, a: [2, 3, 4], k: [[0, raupe[0]], [0.16, raupe[1]], [0.3, raupe[2]], [0.45, raupe[3]], [0.6, raupe[3]], [0.74, raupe[2]], [0.86, raupe[1]], [1, raupe[0]]] } },
+  'kissen-druecken': { n: 'Kissen zwischen den Knien drücken', m: 'kraft', h: ['addu'], nb: ['bauch'], eq: 'Kissen', lv: 1, min: 2, dos: { typ: 'zeit', sek: 10, s: 5 },
+    st: ['Rückenlage, die Knie aufgestellt, ein Kissen oder ein zusammengerolltes Handtuch zwischen den Knien.', 'Die Knie fest gegen das Kissen drücken.', '10 Sekunden halten, dann lösen. Ruhig weiteratmen.'],
+    f: ['Nicht die Luft anhalten.', 'Der untere Rücken bleibt ruhig am Boden.'], le: 'Nur mit halber Kraft drücken.', sw: 'Dabei das Becken zur Glute Bridge anheben.',
+    an: { d: 5, p: [['ball', liegeBasis[8], liegeBasis[9], 0, 4.6]], a: [3, 4], k: [[0, kissenA], [0.3, kissenB], [0.8, kissenB], [1, kissenA]] } },
+  'schienbein-dehnung': { n: 'Schienbein-Dehnung im Fersensitz', m: 'dehn', h: ['schienbein'], nb: ['quad'], eq: 'Matte', lv: 1, min: 2, dos: { typ: 'zeit', sek: 30, s: 2 },
+    st: ['Auf die Fersen setzen, die Fußrücken liegen flach auf der Matte.', 'Die Hände hinter dem Körper aufsetzen.', 'Langsam nach hinten lehnen, bis es vorn am Schienbein und am Fußrücken zieht. Halten.'],
+    f: ['Nicht federn.', 'Bei Knieschmerzen ein Kissen zwischen Gesäß und Fersen legen.'], le: 'Aufrecht sitzen bleiben.', sw: 'Die Knie leicht vom Boden abheben.',
+    an: { d: 6, a: [4, 5], k: [[0, fersA], [0.35, fersB], [0.8, fersB], [1, fersA]] } }
 };
 
 export const LEVEL = ['', 'Einsteiger', 'Fortgeschritten', 'Profi'];

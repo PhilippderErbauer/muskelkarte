@@ -11,6 +11,14 @@
 // Felder einer Animation: d Dauer in Sekunden, k Posen [[Zeit 0..1, Punkte]], a aktive Kette
 // (leuchtet in der Akzentfarbe), lin lineare Überblendung, fl Seitenlage, as asymmetrisch
 // (nur die erste Seite leuchtet), y Startwinkel der Kamera, p Requisiten.
+//
+// Requisiten (y wie bei den Posen, Boden bei 150):
+//   ['box', x0, y0, z0, x1, y1, z1]   Quader (Wand, Stuhl, Stufe)
+//   ['ball', x, y, z, r]              Kugel (Tennisball, Kissen)
+//   ['rolle', x, y, z0, z1, r]        Rolle quer zum Körper (Faszienrolle)
+//   ['rollex', x0, x1, y, r]          Rolle längs zum Körper
+//   ['band', x, y, z, j]              Band vom Punkt zur Hand j (8 erste, 13 zweite Hand)
+//   ['hantel', j]                     Kurzhantel oder Flasche in Hand j
 
 const { abs, sqrt, max, min, cos, sin } = Math;
 
@@ -83,7 +91,9 @@ export function puppe(J, an, th) {
   // Requisiten: ['box', x0, y0, z0, x1, y1, z1] oder ['ball', x, y, z, r] (Seitenansicht-Koordinaten)
   (an.p || []).forEach((q) => {
     if (q[0] === 'box') box(q[1], 150 - q[5], q[3], q[4], 150 - q[2], q[6], th.prop);
-    else kap([q[1], 150 - q[2], q[3]], [q[1], 150 - q[2], q[3]], q[4], q[4], 1, 1, th.prop);
+    else if (q[0] === 'ball') kap([q[1], 150 - q[2], q[3]], [q[1], 150 - q[2], q[3]], q[4], q[4], 1, 1, th.prop);
+    else if (q[0] === 'rolle') kap([q[1], 150 - q[2], q[3]], [q[1], 150 - q[2], q[4]], q[5], q[5], 1, 1, th.prop);
+    else if (q[0] === 'rollex') kap([q[1], 150 - q[3], 0], [q[2], 150 - q[3], 0], q[4], q[4], 1, 1, th.prop);
   });
   const X = (j) => J[2 * j], Y = (j) => 150 - J[2 * j + 1];
   const fl = !!an.fl;
@@ -122,6 +132,12 @@ export function puppe(J, an, th) {
   kap(s1, e1, 4.2, 3.6, 1, 1, c('1-7'));
   kap(e1, ha1, 3.6, 2.8, 1, 1, c('7-8'));
   kap(ha1, ha1, 3.4, 3.4, 1, 1, th.skin);
+  // Requisiten, die an einer Hand hängen
+  const hand = (j) => (j === 13 ? ha2 : ha1);
+  (an.p || []).forEach((q) => {
+    if (q[0] === 'band') kap([q[1], 150 - q[2], q[3]], hand(q[4]), 0.9, 0.9, 1, 1, th.prop);
+    else if (q[0] === 'hantel') { const h = hand(q[1]); kap([h[0], h[1], h[2] - 6], [h[0], h[1], h[2] + 6], 2.6, 2.6, 1, 1, th.prop); }
+  });
   const n = P.length / 3;
   return { mesh: { P: new Float32Array(P), N: new Float32Array(N), A: null, M: null, T: new Uint16Array(T), n }, col: new Uint8Array(Cc) };
 }
